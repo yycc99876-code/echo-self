@@ -103,11 +103,30 @@ export default function LifeChartPage() {
       </div>
 
       {chart && (
-        <section className="panel mt-10 max-w-4xl p-6">
-          <div className="font-label text-[11px] text-[var(--archive)]">MARKDOWN PREVIEW</div>
-          <div className="markdown mt-4">
-            <ReactMarkdown>{chart}</ReactMarkdown>
+        <section className="mt-10 grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="panel p-6">
+            <div className="font-label text-[11px] text-[var(--archive)]">MARKDOWN PREVIEW</div>
+            <div className="markdown mt-4">
+              <ReactMarkdown>{chart}</ReactMarkdown>
+            </div>
           </div>
+
+          <aside className="soft-panel h-fit p-5">
+            <div className="font-label text-[11px] text-[var(--success)]">PROFILE ACTIVE</div>
+            <h2 className="mt-2 text-xl font-semibold">档案已生效</h2>
+            <p className="mt-3 text-sm leading-7 text-[var(--text-secondary)]">
+              Echo 现在会在对话中优先读取这份 Life Chart 摘要。下一步不是再填表，而是用一个真实问题开始对话。
+            </p>
+            <div className="mt-5 space-y-2 text-xs text-[var(--text-tertiary)]">
+              <p>可以直接问：</p>
+              <p>我适合转向 AI 产品吗？</p>
+              <p>我的命谱里反复出现什么主题？</p>
+              <p>今天我应该先做哪件具体的事？</p>
+            </div>
+            <Link href="/echo" className="primary-button mt-5 inline-block w-full text-center">
+              带着档案进入 Echo
+            </Link>
+          </aside>
         </section>
       )}
     </div>

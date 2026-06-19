@@ -41,6 +41,9 @@ export default function MemoryPage() {
       <aside className="border-r border-[var(--border-subtle)] bg-[var(--bg-sidebar)] p-6">
         <div className="font-label text-[11px] text-[var(--accent)]">MEMORY ARCHIVE</div>
         <h1 className="mt-2 text-2xl font-semibold">记忆档案库</h1>
+        <p className="mt-3 text-xs leading-6 text-[var(--text-tertiary)]">
+          这里不是完整聊天记录，只显示 Echo 从重要对话里沉淀出的长期理解。
+        </p>
         <input className="field mt-6" placeholder="搜索记忆..." value={query} onChange={(event) => setQuery(event.target.value)} />
         <div className="mt-4 flex flex-wrap gap-2">
           {filters.map((item) => (

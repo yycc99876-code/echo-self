@@ -17,14 +17,17 @@ export function ChatPanel({
   onMemoryUpdating: (status: "idle" | "updating" | "skipped") => void;
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [memoryState, setMemoryState] = useState<MemoryState | null>(null);
   const [input, setInput] = useState("");
   const [status, setStatus] = useState<EchoStatus>("standby");
   const [error, setError] = useState("");
+  const [memoryNotice, setMemoryNotice] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
   const stopSpeechRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     fetchMemoryState().then((state) => {
+      setMemoryState(state);
       setMessages(state.messages);
       onMemoryState(state);
     });
@@ -43,6 +46,7 @@ export function ChatPanel({
     setError("");
     setInput("");
     setStatus("thinking");
+    setMemoryNotice("");
     stopSpeechRef.current();
     onMemoryUpdating("idle");
 
@@ -74,16 +78,21 @@ export function ChatPanel({
 
       setStatus("speaking");
       if (response.memoryUpdateStatus === "queued") {
+        setMemoryNotice("这轮对话有长期价值，正在写入 Memory。");
         onMemoryUpdating("updating");
         window.setTimeout(async () => {
           const state = await fetchMemoryState();
+          setMemoryState(state);
           setMessages(state.messages);
           onMemoryState(state);
           onMemoryUpdating("idle");
+          setMemoryNotice("Memory 已更新。");
         }, 1200);
       } else {
+        setMemoryNotice("这轮只是近期对话，不写入长期记忆。");
         onMemoryUpdating("skipped");
         fetchMemoryState().then((state) => {
+          setMemoryState(state);
           setMessages(state.messages);
           onMemoryState(state);
         });
@@ -94,6 +103,7 @@ export function ChatPanel({
       setError("Echo 暂时没有稳定回应，请稍后再试。");
       onMemoryUpdating("idle");
       fetchMemoryState().then((state) => {
+        setMemoryState(state);
         setMessages(state.messages);
         onMemoryState(state);
       });
@@ -103,6 +113,24 @@ export function ChatPanel({
   return (
     <div className="flex h-full flex-col">
       <div className="border-b border-[var(--border-subtle)] p-6">
+        {!memoryState?.lifeChart ? (
+          <div className="mb-4 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--archive-soft)] p-4">
+            <div className="font-label text-[11px] text-[var(--archive)]">LIFE CHART MISSING</div>
+            <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
+              你可以先聊天，但 Echo 还没有初始命谱档案。为了让对话真正形成连续理解，建议先建立 Life Chart。
+            </p>
+            <a href="/life-chart" className="secondary-button mt-3 inline-block">
+              去建立 Life Chart
+            </a>
+          </div>
+        ) : (
+          <div className="mb-4 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+            <div className="font-label text-[11px] text-[var(--success)]">LIFE CHART ACTIVE</div>
+            <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
+              Echo 正在使用 {memoryState.lifeChart.userName} 的 Life Chart 摘要、近期对话和长期 Memory 来回应。
+            </p>
+          </div>
+        )}
         <IdentityCard status={status} />
         <div className="mt-4">
           <PromptChips disabled={status !== "standby"} onSelect={(text) => submit(text)} />
@@ -133,6 +161,7 @@ export function ChatPanel({
       </div>
 
       {error && <div className="px-6 pb-2 text-xs text-[var(--danger)]">{error}</div>}
+      {memoryNotice && <div className="px-6 pb-2 text-xs text-[var(--text-tertiary)]">{memoryNotice}</div>}
       <CommandInput
         value={input}
         disabled={status === "thinking"}

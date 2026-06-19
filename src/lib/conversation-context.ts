@@ -1,4 +1,4 @@
-import type { ActiveMemory, LifeChart, Message, WikiPage } from "./server-memory-store";
+import type { ActiveMemory, LifeChart, Message, RelationshipItem, WikiPage } from "./server-memory-store";
 
 export type ConversationType =
   | "casual"
@@ -19,6 +19,7 @@ export type ContextPack = {
   relevantWikiPages: WikiPage[];
   openThreads: string[];
   userPreferences: string[];
+  relationshipSummary: string | null;
 };
 
 function hasAny(input: string, patterns: RegExp[]) {
@@ -110,6 +111,23 @@ function extractPreferences(pages: WikiPage[]) {
     .slice(-5);
 }
 
+function summarizeRelationships(items: RelationshipItem[]) {
+  if (items.length === 0) return null;
+  const typeCounts = items.reduce<Record<string, number>>((acc, item) => {
+    acc[item.type] = (acc[item.type] ?? 0) + 1;
+    return acc;
+  }, {});
+  const counts = Object.entries(typeCounts)
+    .map(([type, count]) => `${type}: ${count}`)
+    .join(", ");
+  const notes = items
+    .filter((item) => item.notes.trim())
+    .slice(-3)
+    .map((item) => `- ${item.name} (${item.type}, ${item.strength}): ${item.notes}`)
+    .join("\n");
+  return truncate(`Relationship Map counts: ${counts}\n${notes}`, 500);
+}
+
 function relevantPages(pages: WikiPage[], type: ConversationType) {
   const priorityByType: Record<ConversationType, string[]> = {
     casual: ["rules/future-response-rules", "user/preferences"],
@@ -137,12 +155,14 @@ export function buildContextPack({
   wikiPages,
   recentMessages,
   conversationType,
+  relationshipItems = [],
 }: {
   lifeChart: LifeChart | null;
   activeMemory: ActiveMemory | null;
   wikiPages: WikiPage[];
   recentMessages: Message[];
   conversationType: ConversationType;
+  relationshipItems?: RelationshipItem[];
 }): ContextPack {
   return {
     lifeChartSummary: truncate(lifeChart?.summaryMd ?? lifeChart?.contentMd, 600),
@@ -152,6 +172,7 @@ export function buildContextPack({
     relevantWikiPages: relevantPages(wikiPages, conversationType),
     openThreads: extractOpenThreads(wikiPages),
     userPreferences: extractPreferences(wikiPages),
+    relationshipSummary: summarizeRelationships(relationshipItems),
   };
 }
 
@@ -168,6 +189,7 @@ export function contextPackToPrompt(pack: ContextPack) {
       : "",
     pack.openThreads.length ? `## Open Threads\n${pack.openThreads.map((thread) => `- ${thread}`).join("\n")}` : "",
     pack.userPreferences.length ? `## User Preferences\n${pack.userPreferences.map((preference) => `- ${preference}`).join("\n")}` : "",
+    pack.relationshipSummary ? `## Relationship Map\n${pack.relationshipSummary}` : "",
   ]
     .filter(Boolean)
     .join("\n\n");

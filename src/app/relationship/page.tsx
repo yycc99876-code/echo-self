@@ -49,7 +49,7 @@ export default function RelationshipPage() {
           <div className="font-label text-[11px] text-[var(--accent)]">RELATIONSHIP MAP</div>
           <h1 className="font-editorial mt-2 text-4xl">关系图谱</h1>
           <p className="mt-3 max-w-2xl text-sm leading-7 text-[var(--text-secondary)]">
-            它记录的是你生命中重要关系，以及这些关系如何影响当前主题。
+            它记录的不是通讯录，而是 Echo 在回答关系问题时会读取的上下文：谁重要、关系强度如何、这段关系正在影响什么主题。
           </p>
         </div>
         <button className="primary-button" onClick={() => setShowForm((value) => !value)}>
@@ -96,7 +96,7 @@ export default function RelationshipPage() {
             ))}
           </div>
           <p className="mt-5 text-xs leading-6 text-[var(--text-tertiary)]">
-            关系强度摘要会随着你添加和对话沉淀而变化。没有数据时，图谱只显示关系类型，不虚构人名。
+            关系强度摘要会随着你添加和对话沉淀而变化。Echo 只会读取你真实添加过的关系，不虚构人名。
           </p>
         </aside>
 

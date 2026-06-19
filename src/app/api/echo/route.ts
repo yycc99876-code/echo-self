@@ -4,6 +4,7 @@ import {
   getLifeChart,
   getMemoryState,
   getRecentMessages,
+  getRelationshipItems,
   getWikiPages,
   saveMessage,
   type InputType,
@@ -34,12 +35,14 @@ export async function POST(request: NextRequest) {
     const activeMemory = getActiveMemory();
     const wikiPages = getWikiPages();
     const recentMessages = getRecentMessages(10);
+    const relationshipItems = getRelationshipItems();
     const contextPack = buildContextPack({
       lifeChart,
       activeMemory,
       wikiPages,
       recentMessages,
       conversationType,
+      relationshipItems,
     });
 
     const reply = await generateEchoReply({
