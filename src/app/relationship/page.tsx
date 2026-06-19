@@ -1,161 +1,145 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { createRelationship, fetchMemoryState, removeRelationship } from "@/lib/api-client";
+import type { MemoryState, RelationshipItem } from "@/lib/server-memory-store";
+import { RelationshipMap, typeLabels } from "@/components/RelationshipMap";
 
-// MVP: simple relationship entries stored in localStorage
-interface Relationship {
-  id: string;
-  name: string;
-  role: string; // e.g. 家人, 朋友, 同事, 伴侣
-  notes: string;
-  lastInteraction?: string;
-  createdAt: string;
-}
-
-const STORAGE_KEY = "echo_relationships";
-
-function getRelationships(): Relationship[] {
-  if (typeof window === "undefined") return [];
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-  } catch {
-    return [];
-  }
-}
-
-function saveRelationships(rels: Relationship[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(rels));
-}
+const emptyForm = {
+  name: "",
+  type: "friend" as RelationshipItem["type"],
+  strength: "medium" as RelationshipItem["strength"],
+  notes: "",
+};
 
 export default function RelationshipPage() {
-  const [rels, setRels] = useState<Relationship[]>([]);
+  const [state, setState] = useState<MemoryState | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: "", role: "", notes: "" });
+  const [form, setForm] = useState(emptyForm);
 
-  // Load on mount
   useEffect(() => {
-    setRels(getRelationships());
+    fetchMemoryState().then(setState);
   }, []);
 
-  const handleAdd = () => {
+  const items = state?.relationshipItems ?? [];
+  const counts = useMemo(() => {
+    return items.reduce<Record<string, number>>((acc, item) => {
+      acc[item.type] = (acc[item.type] ?? 0) + 1;
+      return acc;
+    }, {});
+  }, [items]);
+
+  async function add() {
     if (!form.name.trim()) return;
-    const newRel: Relationship = {
-      id: Date.now().toString(36),
-      name: form.name.trim(),
-      role: form.role.trim() || "未分类",
-      notes: form.notes.trim(),
-      createdAt: new Date().toISOString(),
-    };
-    const updated = [...rels, newRel];
-    saveRelationships(updated);
-    setRels(updated);
-    setForm({ name: "", role: "", notes: "" });
+    const response = await createRelationship(form);
+    setState(response.memoryState);
+    setForm(emptyForm);
     setShowForm(false);
-  };
+  }
 
-  const handleDelete = (id: string) => {
-    const updated = rels.filter((r) => r.id !== id);
-    saveRelationships(updated);
-    setRels(updated);
-  };
-
-  // Group by role
-  const grouped = rels.reduce<Record<string, Relationship[]>>((acc, r) => {
-    (acc[r.role] = acc[r.role] || []).push(r);
-    return acc;
-  }, {});
+  async function remove(id: string) {
+    const response = await removeRelationship(id);
+    setState(response.memoryState);
+  }
 
   return (
-    <div className="max-w-2xl mx-auto px-6 py-8">
-      <div className="flex items-center justify-between mb-6">
+    <div className="px-6 py-8 md:px-12">
+      <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-[var(--accent-light)]">关系图谱</h1>
-          <p className="text-xs text-[var(--muted)] mt-1">
-            记录你生命中重要的人
+          <div className="font-label text-[11px] text-[var(--accent)]">RELATIONSHIP MAP</div>
+          <h1 className="font-editorial mt-2 text-4xl">关系图谱</h1>
+          <p className="mt-3 max-w-2xl text-sm leading-7 text-[var(--text-secondary)]">
+            它记录的是你生命中重要关系，以及这些关系如何影响当前主题。
           </p>
         </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="text-sm px-4 py-2 bg-[var(--accent)] text-white rounded-lg hover:bg-[var(--accent-light)] transition-colors"
-        >
-          {showForm ? "取消" : "+ 添加"}
+        <button className="primary-button" onClick={() => setShowForm((value) => !value)}>
+          {showForm ? "收起" : "添加关系"}
         </button>
       </div>
 
-      {/* Add form */}
       {showForm && (
-        <div className="mb-6 p-4 bg-[var(--card-bg)] border border-[var(--card-border)] rounded-lg space-y-3 animate-fade-in">
-          <input
-            type="text"
-            placeholder="姓名"
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            className="w-full bg-[#0a0a0a] border border-[var(--card-border)] rounded px-3 py-2 text-sm focus:outline-none focus:border-[var(--accent)]"
-          />
-          <input
-            type="text"
-            placeholder="关系类型 (家人/朋友/同事/伴侣...)"
-            value={form.role}
-            onChange={(e) => setForm({ ...form, role: e.target.value })}
-            className="w-full bg-[#0a0a0a] border border-[var(--card-border)] rounded px-3 py-2 text-sm focus:outline-none focus:border-[var(--accent)]"
-          />
-          <textarea
-            placeholder="备注..."
-            value={form.notes}
-            onChange={(e) => setForm({ ...form, notes: e.target.value })}
-            rows={3}
-            className="w-full bg-[#0a0a0a] border border-[var(--card-border)] rounded px-3 py-2 text-sm focus:outline-none focus:border-[var(--accent)] resize-none"
-          />
-          <button
-            onClick={handleAdd}
-            className="text-sm px-4 py-2 bg-[var(--accent)] text-white rounded hover:bg-[var(--accent-light)] transition-colors"
-          >
+        <section className="soft-panel mb-8 grid gap-4 p-5 md:grid-cols-4">
+          <input className="field" placeholder="姓名或称呼" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+          <select className="field" value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value as RelationshipItem["type"] })}>
+            {Object.entries(typeLabels).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+          <select className="field" value={form.strength} onChange={(event) => setForm({ ...form, strength: event.target.value as RelationshipItem["strength"] })}>
+            <option value="low">低强度</option>
+            <option value="medium">中强度</option>
+            <option value="high">高强度</option>
+          </select>
+          <button className="primary-button" onClick={add}>
             保存
           </button>
-        </div>
+          <textarea
+            className="field min-h-24 resize-none md:col-span-4"
+            placeholder="关系笔记：这段关系如何影响你现在的主题？"
+            value={form.notes}
+            onChange={(event) => setForm({ ...form, notes: event.target.value })}
+          />
+        </section>
       )}
 
-      {/* Relationship list */}
-      {rels.length === 0 ? (
-        <div className="text-center py-16 text-[var(--muted)]">
-          <p className="text-2xl mb-2">&amp;</p>
-          <p className="text-sm">还没有记录任何关系</p>
-          <p className="text-xs mt-1">点击上方 &quot;+ 添加&quot; 开始记录</p>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {Object.entries(grouped).map(([role, members]) => (
-            <div key={role}>
-              <h2 className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wider mb-2">
-                {role} ({members.length})
-              </h2>
-              <div className="space-y-2">
-                {members.map((rel) => (
-                  <div
-                    key={rel.id}
-                    className="flex items-start justify-between p-3 bg-[var(--card-bg)] border border-[var(--card-border)] rounded-lg"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm">{rel.name}</div>
-                      {rel.notes && (
-                        <div className="text-xs text-[var(--muted)] mt-1 truncate">
-                          {rel.notes}
-                        </div>
-                      )}
+      <div className="grid gap-6 xl:grid-cols-[280px_1fr_340px]">
+        <aside className="soft-panel h-fit p-5">
+          <div className="font-label text-[11px] text-[var(--archive)]">KEY TYPES</div>
+          <div className="mt-4 space-y-3">
+            {Object.entries(typeLabels).map(([type, label]) => (
+              <div key={type} className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-2 text-sm">
+                <span className="text-[var(--text-secondary)]">{label}</span>
+                <span className="font-label text-[var(--accent)]">{counts[type] ?? 0}</span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-5 text-xs leading-6 text-[var(--text-tertiary)]">
+            关系强度摘要会随着你添加和对话沉淀而变化。没有数据时，图谱只显示关系类型，不虚构人名。
+          </p>
+        </aside>
+
+        <RelationshipMap items={items} />
+
+        <aside className="space-y-4">
+          <Panel title="最近互动">{items[0]?.lastInteraction || "还没有记录最近互动。"}</Panel>
+          <Panel title="关系笔记">
+            {items.length ? (
+              <div className="space-y-3">
+                {items.map((item) => (
+                  <div key={item.id} className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3">
+                    <div className="flex justify-between gap-2">
+                      <span className="text-sm text-[var(--text-primary)]">{item.name}</span>
+                      <button className="text-xs text-[var(--danger)]" onClick={() => remove(item.id)}>
+                        删除
+                      </button>
                     </div>
-                    <button
-                      onClick={() => handleDelete(rel.id)}
-                      className="text-xs text-[var(--muted)] hover:text-red-400 ml-2 shrink-0"
-                    >
-                      删除
-                    </button>
+                    <div className="font-label mt-1 text-[10px] text-[var(--text-faint)]">{typeLabels[item.type]} / {item.strength}</div>
+                    <p className="mt-2 text-xs leading-6 text-[var(--text-secondary)]">{item.notes || "暂无笔记。"}</p>
                   </div>
                 ))}
               </div>
-            </div>
-          ))}
-        </div>
-      )}
+            ) : (
+              "还没有关系笔记。"
+            )}
+          </Panel>
+          <Panel title="关系洞察">
+            {items.length
+              ? "当前图谱已经开始形成。下一步可以在 Echo 对话中讨论某段关系如何影响你的选择。"
+              : "空图谱不是错误状态。它表示 Echo 还没有足够关系上下文，需要由你主动添加或在对话中沉淀。"}
+          </Panel>
+        </aside>
+      </div>
     </div>
+  );
+}
+
+function Panel({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="soft-panel p-5">
+      <div className="font-label text-[11px] text-[var(--text-faint)]">{title}</div>
+      <div className="mt-3 text-sm leading-7 text-[var(--text-secondary)]">{children}</div>
+    </section>
   );
 }

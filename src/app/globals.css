@@ -1,86 +1,206 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0a0a0a;
-  --foreground: #ededed;
-  --accent: #7c6f5b;
-  --accent-light: #a89880;
-  --muted: #666;
-  --card-bg: #141414;
-  --card-border: #222;
+  --bg-root: #080A0D;
+  --bg-sidebar: #0B0D10;
+  --bg-surface: #101318;
+  --bg-panel: #141820;
+  --bg-panel-soft: #171B22;
+  --bg-input: #11151B;
+  --text-primary: #ECEFF2;
+  --text-secondary: #A4ACB6;
+  --text-tertiary: #6F7884;
+  --text-faint: #4F5864;
+  --border-subtle: rgba(225, 234, 245, 0.08);
+  --border-strong: rgba(225, 234, 245, 0.16);
+  --accent: #AFC7E8;
+  --accent-soft: rgba(175, 199, 232, 0.12);
+  --accent-strong: #D8E7FA;
+  --archive: #D8D0C2;
+  --archive-soft: rgba(216, 208, 194, 0.10);
+  --success: #8ED6A3;
+  --danger: #F08C8C;
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 22px;
+  --radius-xl: 32px;
+  --shadow-panel: 0 20px 70px rgba(0, 0, 0, 0.36);
+}
+
+* {
+  box-sizing: border-box;
 }
 
 html,
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   min-height: 100vh;
+  margin: 0;
+  background: var(--bg-root);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", sans-serif;
+  line-height: 1.6;
 }
 
-/* Markdown content styling */
-.prose h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem; }
-.prose h2 { font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem; }
-.prose h3 { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.25rem; }
-.prose p { margin-bottom: 0.75rem; line-height: 1.7; }
-.prose ul { list-style: disc; padding-left: 1.5rem; margin-bottom: 0.75rem; }
-.prose ol { list-style: decimal; padding-left: 1.5rem; margin-bottom: 0.75rem; }
-.prose li { margin-bottom: 0.25rem; }
-.prose blockquote {
-  border-left: 3px solid var(--accent);
-  padding-left: 1rem;
-  color: var(--muted);
-  font-style: italic;
-  margin-bottom: 0.75rem;
-}
-.prose code {
-  background: #1e1e1e;
-  padding: 0.15rem 0.4rem;
-  border-radius: 4px;
-  font-size: 0.9em;
-}
-.prose pre {
-  background: #1e1e1e;
-  padding: 1rem;
-  border-radius: 8px;
-  overflow-x: auto;
-  margin-bottom: 0.75rem;
+button,
+input,
+textarea,
+select {
+  font: inherit;
 }
 
-/* Chat bubble animations */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.animate-fade-in {
-  animation: fadeIn 0.3s ease-out;
+button {
+  cursor: pointer;
 }
 
-/* Typing indicator */
-@keyframes blink {
-  0%, 80%, 100% { opacity: 0; }
-  40% { opacity: 1; }
-}
-.typing-dot {
-  animation: blink 1.4s infinite both;
-}
-.typing-dot:nth-child(2) { animation-delay: 0.2s; }
-.typing-dot:nth-child(3) { animation-delay: 0.4s; }
-
-/* Speaking avatar glow */
-@keyframes speak-glow {
-  0%, 100% { box-shadow: 0 0 12px 2px rgba(125, 186, 109, 0.3); }
-  50% { box-shadow: 0 0 24px 6px rgba(125, 186, 109, 0.5); }
-}
-.animate-speak-glow {
-  animation: speak-glow 1.8s ease-in-out infinite;
+button:disabled {
+  cursor: not-allowed;
 }
 
-/* Subtitle sync highlight */
-@keyframes subtitle-appear {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+::selection {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
 }
-.animate-subtitle {
-  animation: subtitle-appear 0.4s ease-out;
+
+.font-editorial {
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+.font-label {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.page-shell {
+  min-height: 100vh;
+  background:
+    linear-gradient(180deg, rgba(175, 199, 232, 0.035), transparent 260px),
+    var(--bg-root);
+}
+
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-panel);
+}
+
+.soft-panel {
+  background: var(--bg-panel-soft);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.field {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  outline: none;
+  padding: 12px 14px;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+.field:focus {
+  border-color: var(--border-strong);
+  background: #121820;
+}
+
+.field::placeholder {
+  color: var(--text-faint);
+}
+
+.primary-button,
+.secondary-button,
+.icon-button {
+  border-radius: var(--radius-sm);
+  min-height: 40px;
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, color 160ms ease;
+}
+
+.primary-button {
+  background: var(--accent-strong);
+  color: #091018;
+  border: 1px solid var(--accent-strong);
+  padding: 10px 16px;
+  font-weight: 650;
+}
+
+.secondary-button {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+  padding: 10px 16px;
+}
+
+.icon-button {
+  width: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+}
+
+.primary-button:hover,
+.secondary-button:hover,
+.icon-button:hover {
+  transform: translateY(-1px);
+  border-color: var(--border-strong);
+}
+
+.markdown {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.markdown h1,
+.markdown h2,
+.markdown h3 {
+  color: var(--text-primary);
+  line-height: 1.3;
+  margin: 20px 0 10px;
+}
+
+.markdown h1 {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 28px;
+}
+
+.markdown h2 {
+  font-size: 18px;
+}
+
+.markdown h3 {
+  font-size: 15px;
+}
+
+.markdown p,
+.markdown ul,
+.markdown ol {
+  margin: 0 0 12px;
+}
+
+.markdown ul,
+.markdown ol {
+  padding-left: 20px;
+}
+
+.markdown li {
+  margin: 6px 0;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 240ms ease-out both;
 }

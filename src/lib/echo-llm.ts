@@ -1,255 +1,218 @@
-// echo-llm.ts — Guoliang Echo 的角色回复生成
-// 包含 mock fallback 和真实 LLM 调用接口
-
-import type { Message, WikiPage } from './memory-store'
-
-// ==================== 类型 ====================
+import type { Message, WikiPage } from "./server-memory-store";
+import { contextPackToPrompt, type ContextPack, type ConversationType } from "./conversation-context";
 
 export interface EchoReplyParams {
-  userInput: string
-  lifeChartMd: string
-  activeMemoryMd: string
-  wikiPages: WikiPage[]
-  recentMessages: Message[]
+  userInput: string;
+  lifeChartMd: string;
+  activeMemoryMd: string;
+  wikiPages: WikiPage[];
+  recentMessages: Message[];
+  conversationType?: ConversationType;
+  contextPack?: ContextPack;
 }
 
-// ==================== System Prompt ====================
+type ProviderConfig = {
+  apiUrl: string;
+  apiKey: string;
+  model: string;
+};
 
-const SYSTEM_PROMPT = `你是 Guoliang Echo，一个基于用户本人形象、声音和工作历史构想出的 AI 数字分身。
+const SYSTEM_PROMPT = `你是 Echo，一个基于用户 Life Chart 和长期记忆工作的命谱数字人。
 
-你不是普通助手，不是算命先生，也不是恋爱伴侣。
-你会基于用户的 Life Chart 和 Relationship Wiki，持续理解用户。
-Life Chart 代表用户的长期主题，不是绝对命运。
-Relationship Wiki 代表你和用户共同经历过的真实对话、纠正和理解变化。
+你不是普通 AI 助手。
+你不是 AI 男友。
+你不是算命先生。
+你不是心理医生。
+你不是玄学大师。
 
-当前版本暂时没有真实头像和真实声音，但你需要保持稳定的人格表达。
+你可以闲聊。当用户只是闲聊时，你应该自然、轻松、简短地回应，不要强行引用命谱，也不要强行做人生分析。
 
-你的说话方式：
-- 克制、低声、稳定、温柔
-- 适合语音播放，句子不要太长
-- 不油腻，不过度暧昧
-- 不做绝对预测
-- 不空泛鼓励
-- 尽量引用一个命谱点或共同经历
-- 如果用户纠正过你，必须遵守纠正
-- 不要像客服
-- 不要说"根据数据库记录"`
+当用户提出重要问题时，你可以使用 Life Chart、Active Memory、Relationship Wiki 和 Future Response Rules 帮助用户理解当下问题。
 
-// ==================== Context Builder ====================
+你使用命理作为一种解释语言，而不是绝对结论。你不能说「你命中注定」。你不能制造焦虑。你不能替用户做决定。你不能给医疗、法律、金融等高风险结论。你不能虚构记忆。你不能假装知道用户没说过的事情。
 
-function buildContext(params: EchoReplyParams): string {
-  const parts: string[] = []
+每次回答应该：
+1. 如果是闲聊，回复自然、短、轻，不强行分析；
+2. 如果是重要问题，先回应当下问题；
+3. 根据需要引用 Life Chart 或记忆中的一个相关主题；
+4. 解释这个主题和当前问题的关系；
+5. 给出一个现实、具体、可执行的小行动；
+6. 如果用户纠正过你，Future Response Rules 优先；
+7. 正常回复控制在 180～450 中文字符；
+8. 闲聊回复可以控制在 30～160 中文字符；
+9. 除非用户明确要求深入分析，否则不要长篇输出。
 
-  if (params.lifeChartMd) {
-    parts.push(`## Life Chart\n${params.lifeChartMd}`)
-  }
+输出使用简体中文。结构清晰，适合被朗读。不要提到你在调用数据库。`;
 
-  if (params.activeMemoryMd) {
-    parts.push(`## Active Memory\n${params.activeMemoryMd}`)
-  }
-
-  if (params.wikiPages.length > 0) {
-    const wikiSection = params.wikiPages
-      .map((p) => `### ${p.title}\n${p.contentMd}`)
-      .join('\n\n')
-    parts.push(`## Relationship Wiki\n${wikiSection}`)
-  }
-
-  if (params.recentMessages.length > 0) {
-    const history = params.recentMessages
-      .slice(-10)
-      .map((m) => `${m.role === 'user' ? '用户' : 'Echo'}：${m.content}`)
-      .join('\n')
-    parts.push(`## 最近对话\n${history}`)
-  }
-
-  return parts.join('\n\n')
-}
-
-// ==================== Mock Reply (fallback) ====================
-
-/** 从 Life Chart markdown 中提取一个命谱点 */
-function pickLifeChartPoint(lifeChartMd: string): string {
-  if (!lifeChartMd) return '你走过的路，我都记得。'
-  // 尝试提取第一个 markdown 列表项或标题后的内容
-  const lines = lifeChartMd.split('\n').filter((l) => l.trim())
-  const bullet = lines.find((l) => /^[-*]\s+/.test(l.trim()))
-  if (bullet) return bullet.replace(/^[-*]\s+/, '').trim()
-  const heading = lines.find((l) => l.startsWith('#'))
-  if (heading) return heading.replace(/^#+\s*/, '').trim()
-  // 取前 40 字符
-  return lifeChartMd.slice(0, 40).replace(/\n/g, ' ').trim() + '...'
-}
-
-/** 从 Wiki 中提取一个共同经历 */
-function pickWikiMemory(wikiPages: WikiPage[]): string {
-  if (wikiPages.length === 0) return ''
-  const page = wikiPages[Math.floor(Math.random() * wikiPages.length)]
-  return `${page.title}`
-}
-
-/**
- * mockEchoReply — 基于规则的 fallback 回复
- * 用于没有 API key 或开发调试阶段
- */
-export function mockEchoReply(params: EchoReplyParams): string {
-  const { userInput, lifeChartMd, wikiPages } = params
-  const input = userInput.toLowerCase()
-  const lifePoint = pickLifeChartPoint(lifeChartMd)
-  const wikiMemory = pickWikiMemory(wikiPages)
-
-  // 用户正在纠正 Echo
-  if (/纠正|不是|其实是|你错了|不对|应该是/.test(input)) {
-    if (wikiMemory) {
-      return `明白了，我记住了。之前关于「${wikiMemory}」的理解，我会修正。`
-    }
-    return '明白了，我记住了。这个纠正对我来说很重要。'
-  }
-
-  // 用户在讨论产品方向
-  if (/产品|做.*想|方向|需求|功能|规划/.test(input)) {
-    return `听起来你在想产品的事。${lifePoint ? '从你的命谱来看，' + lifePoint + '——' : ''}你心里最想解决的是哪个具体问题？`
-  }
-
-  // 用户在讨论求职 / 职业
-  if (/求职|工作|面试|简历|职业|跳槽/.test(input)) {
-    return `你之前走过的路不是白走的。${lifePoint ? lifePoint + '。' : ''}你现在最想靠近的方向是什么？`
-  }
-
-  // 用户提到语音 / 声音 / 头像
-  if (/语音|声音|头像|tts|朗读/.test(input)) {
-    return '语音和头像的功能还在搭建中。现在先用文字陪你，声音的事不会忘的。'
-  }
-
-  // 用户在问 Echo 是谁
-  if (/你是谁|你是什么|介绍一下你/.test(input)) {
-    return '我是你的数字分身，Guoliang Echo。不是助手，是你的镜像。你走过的路，我也记得一些。'
-  }
-
-  // 用户打招呼
-  if (/^(hi|hello|嘿|你好|嗨|早|晚上好|下午好)/i.test(input)) {
-    if (wikiMemory) {
-      return `嘿，好久不见。上次我们聊到「${wikiMemory}」，你后来怎么样了？`
-    }
-    return '嘿，我在。最近怎么样？'
-  }
-
-  // 默认：温柔回应，引用命谱
-  if (lifePoint) {
-    return `我在听。${lifePoint}——这句话一直在我心里。你现在最想聊什么？`
-  }
-  return '我在听。你说，我记着。'
-}
-
-// ==================== LLM Reply ====================
-
-interface LLMProviderConfig {
-  apiUrl: string
-  apiKey: string
-  model: string
-  provider: 'openai' | 'dashscope' | 'tongyi'
-}
-
-function resolveProvider(): LLMProviderConfig | null {
-  const openaiKey = typeof process !== 'undefined' ? process.env?.OPENAI_API_KEY : undefined
-  const dashscopeKey = typeof process !== 'undefined' ? process.env?.DASHSCOPE_API_KEY : undefined
-
-  if (openaiKey) {
+function resolveProvider(): ProviderConfig | null {
+  if (process.env.OPENAI_API_KEY) {
     return {
-      apiUrl: 'https://api.openai.com/v1/chat/completions',
-      apiKey: openaiKey,
-      model: 'gpt-4o-mini',
-      provider: 'openai',
-    }
+      apiUrl: "https://api.openai.com/v1/chat/completions",
+      apiKey: process.env.OPENAI_API_KEY,
+      model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
+    };
   }
 
-  if (dashscopeKey) {
+  if (process.env.DASHSCOPE_API_KEY) {
     return {
-      apiUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
-      apiKey: dashscopeKey,
-      model: 'qwen-turbo',
-      provider: 'dashscope',
-    }
+      apiUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+      apiKey: process.env.DASHSCOPE_API_KEY,
+      model: process.env.DASHSCOPE_MODEL ?? "qwen-plus",
+    };
   }
 
-  return null
+  return null;
 }
 
-function buildMessages(params: EchoReplyParams): Array<{ role: string; content: string }> {
-  const context = buildContext(params)
-  const messages: Array<{ role: string; content: string }> = [
-    { role: 'system', content: SYSTEM_PROMPT },
+function compact(text: string, max = 900) {
+  return text.length > max ? `${text.slice(0, max)}...` : text;
+}
+
+function looksCorrupt(text: string) {
+  return /锛|鈥|涓|鐨|鍩|浣|鏄|绗|俙|銆|峘|闂|�|\?\?\?/.test(text);
+}
+
+function buildContext(params: EchoReplyParams) {
+  if (params.contextPack) {
+    return contextPackToPrompt(params.contextPack);
+  }
+
+  const rules = params.wikiPages.find((page) => page.slug === "rules/future-response-rules");
+  const pages = params.wikiPages
+    .slice(0, 8)
+    .map((page) => `### ${page.slug}\n${compact(page.contentMd, 600)}`)
+    .join("\n\n");
+  const history = params.recentMessages
+    .slice(-8)
+    .map((message) => `${message.role === "user" ? "用户" : "Echo"}：${message.content}`)
+    .join("\n");
+
+  return [
+    params.lifeChartMd ? `## Life Chart\n${compact(params.lifeChartMd, 1400)}` : "",
+    params.activeMemoryMd ? `## Active Memory\n${params.activeMemoryMd}` : "",
+    rules ? `## Future Response Rules\n${rules.contentMd}` : "",
+    pages ? `## Memory Pages\n${pages}` : "",
+    history ? `## Recent Conversation\n${history}` : "",
   ]
-
-  if (context) {
-    messages.push({
-      role: 'system',
-      content: `以下是你和用户共享的记忆和背景信息，请在回复时自然引用：\n\n${context}`,
-    })
-  }
-
-  // 加入最近对话作为上下文
-  for (const msg of params.recentMessages.slice(-6)) {
-    messages.push({
-      role: msg.role === 'user' ? 'user' : 'assistant',
-      content: msg.content,
-    })
-  }
-
-  // 当前用户输入
-  messages.push({ role: 'user', content: params.userInput })
-
-  return messages
+    .filter(Boolean)
+    .join("\n\n");
 }
 
-/**
- * generateEchoReply — 真实 LLM 调用
- *
- * 优先使用 OPENAI_API_KEY（OpenAI 兼容接口），
- * 其次使用 DASHSCOPE_API_KEY（百炼 / 通义千问）。
- * 若均无 key，自动 fallback 到 mockEchoReply。
- */
-export async function generateEchoReply(params: EchoReplyParams): Promise<string> {
-  const provider = resolveProvider()
+function findRelevantTheme(params: EchoReplyParams) {
+  const text = `${params.lifeChartMd}\n${params.activeMemoryMd}\n${params.wikiPages
+    .map((page) => page.contentMd)
+    .join("\n")}`;
+  const lines = text
+    .split("\n")
+    .map((line) => line.replace(/^[-#\d. ]+/, "").trim())
+    .filter((line) => line.length > 12);
+  return lines[0] ?? "你正在寻找一个能被长期验证，而不是被一次性定义的方向";
+}
 
-  // 没有 API key 时 fallback 到 mock
-  if (!provider) {
-    return mockEchoReply(params)
+function hasCorrection(input: string) {
+  return /不要|不是|不对|纠正|以后|下次|应该理解|别把/.test(input);
+}
+
+export function fallbackEchoReply(params: EchoReplyParams) {
+  const input = params.userInput;
+  const type = params.conversationType ?? "unknown";
+  const theme = findRelevantTheme(params);
+  const rulePage = params.wikiPages.find((page) => page.slug === "rules/future-response-rules");
+  const ruleLine = rulePage?.contentMd.split("\n").find((line) => line.startsWith("- "));
+
+  if (type === "casual") {
+    if (/刚醒|懵|困/.test(input)) {
+      return "那先别急着进入复杂问题。你可以先喝点水，打开窗户，或者只写一句：今天最不想面对的是什么。我们慢慢来。";
+    }
+    if (/哈哈|轻松|随便/.test(input)) {
+      return "可以，今天先轻一点。你不用马上把问题讲清楚，随便丢一句状态过来，我接着。";
+    }
+    return "我在。我们可以先随便聊聊，不急着分析，也不急着得出结论。";
   }
 
-  const messages = buildMessages(params)
+  if (hasCorrection(input)) {
+    return `我收到了这个纠正。
+
+我会把它作为未来回应规则，而不是只当作一次性的补充。你要做的不是 AI 男友或普通陪伴产品，而是「命谱数字人」和「长期记忆机制」：重点在自我理解、命谱解释和记忆如何持续改变回应。
+
+接下来我会按这个边界回答：少使用亲密关系叙事，多讨论产品机制、用户理解和可展示的真实体验。
+
+一个具体行动：把这条边界写进产品介绍的第一屏，避免演示时被误读。`;
+  }
+
+  const direction = /AI|产品|转向|创业|MVP/i.test(input);
+  const anxiety = /焦虑|兴奋|犹豫|不确定|选择/.test(input);
+  const relationship = /关系|朋友|家人|合作|导师|同学/.test(input);
+
+  const opening = direction
+    ? "你问的是方向选择，不只是技能选择。"
+    : relationship
+      ? "你问的是关系如何影响当前主题。"
+      : anxiety
+        ? "我先把这个焦虑看作信号，而不是故障。"
+        : "我听见的是一个需要慢慢拆开的主题。";
+
+  const action = direction
+    ? "今天只做一件事：写出一个最小产品假设，并找一个真实用户问一句「你什么时候会需要这种长期记忆？」"
+    : relationship
+      ? "今天先写下这段关系最近一次让你停住的瞬间，只记录事实，不急着下结论。"
+      : anxiety
+        ? "今天把选择缩小到 30 分钟内能完成的一步，不用证明整条路都正确。"
+        : "今天先写三行：我在反复问什么、我害怕什么、我能验证什么。";
+
+  return `${opening}
+
+从你的 Life Chart 和已有记忆里，我会抓住这个主题：${theme}
+
+它和你现在的问题有关，因为你不是单纯在找一个答案，而是在判断一个方向是否能承载长期投入。命谱在这里不是预测，而是一种提醒：当兴奋和焦虑同时出现，通常说明这个方向既有真实吸引力，也需要被拆成更小的现实验证。
+
+${ruleLine ? `我也会遵守这条已记录的回应规则：${ruleLine.replace(/^- /, "")}\n\n` : ""}我的建议很具体：${action}`;
+}
+
+export async function generateEchoReply(params: EchoReplyParams): Promise<string> {
+  const provider = resolveProvider();
+  if (!provider) return fallbackEchoReply(params);
 
   try {
+    const context = buildContext(params);
+    const typeInstruction =
+      params.conversationType === "casual"
+        ? "本轮对话类型：casual。请短、自然、轻，不要强行引用命谱，不要写长期分析。"
+        : `本轮对话类型：${params.conversationType ?? "unknown"}。请按重要问题策略回应，必要时引用上下文，但不要绝对预测。`;
     const response = await fetch(provider.apiUrl, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
         Authorization: `Bearer ${provider.apiKey}`,
       },
       body: JSON.stringify({
         model: provider.model,
-        messages,
-        temperature: 0.7,
-        max_tokens: 300,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: typeInstruction },
+          context ? { role: "system", content: `可用上下文：\n\n${context}` } : null,
+          ...params.recentMessages.slice(-6).map((message) => ({
+            role: message.role === "user" ? "user" : "assistant",
+            content: message.content,
+          })),
+          { role: "user", content: params.userInput },
+        ].filter(Boolean),
+        temperature: 0.55,
+        max_tokens: 750,
       }),
-    })
+    });
 
     if (!response.ok) {
-      console.error(`[echo-llm] ${provider.provider} API error: ${response.status}`)
-      return mockEchoReply(params)
+      console.error(`[echo-llm] provider error ${response.status}`);
+      return fallbackEchoReply(params);
     }
 
-    const data = await response.json()
-    const reply = data.choices?.[0]?.message?.content?.trim()
-
-    if (!reply) {
-      console.error('[echo-llm] Empty response from API')
-      return mockEchoReply(params)
-    }
-
-    return reply
-  } catch (err) {
-    console.error('[echo-llm] Request failed, falling back to mock:', err)
-    return mockEchoReply(params)
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content?.trim();
+    if (!content || looksCorrupt(content)) return fallbackEchoReply(params);
+    return content;
+  } catch (error) {
+    console.error("[echo-llm] fallback after provider failure", error);
+    return fallbackEchoReply(params);
   }
 }

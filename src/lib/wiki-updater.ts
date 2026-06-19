@@ -1,291 +1,250 @@
-/**
- * updateRelationshipWiki — 关系记忆更新器
- *
- * 根据对话内容自动更新 Wiki 页面：
- * 1. 用户纠正 → 更新 rules/future-response-rules
- * 2. 话题讨论 → 创建/更新话题页面
- * 3. 情绪表达 → 更新 emotional-state 页面
- * 4. 重要事件 → 更新 life-events 页面
- *
- * 返回本次更新的 WikiUpdate[] 供前端实时刷新。
- */
-
 import {
-  type WikiPage,
-  getWikiPages,
-  upsertWikiPage,
   addWikiEdit,
-} from './server-memory-store'
-
-// ==================== 类型定义 ====================
+  getWikiPages,
+  type Message,
+  type WikiPage,
+  updateActiveMemory,
+  upsertWikiPage,
+} from "./server-memory-store";
+import { shouldWriteLongTermMemory, type ContextPack, type ConversationType } from "./conversation-context";
 
 export interface WikiUpdate {
-  slug: string
-  title: string
-  action: 'created' | 'updated'
-  editSummary: string
+  slug: string;
+  title: string;
+  action: "created" | "updated";
+  editSummary: string;
 }
 
-export interface WikiUpdateInput {
-  userMessage: string
-  aiReply: string
-  existingWikiPages: WikiPage[]
+export type MemoryWriterInput = {
+  userMessage: Message;
+  assistantMessage: Message;
+  conversationType: ConversationType;
+  contextPack: ContextPack;
+};
+
+export type MemoryWriterResult = {
+  shouldWrite: boolean;
+  reason: string;
+  updates?: WikiUpdate[];
+  activeMemoryPatch?: string;
+};
+
+const PAGE = {
+  currentState: "relationship/current-state",
+  timeline: "relationship/timeline",
+  openThreads: "relationship/open-threads",
+  rules: "rules/future-response-rules",
+  currentTheme: "destiny/current-theme",
+  repeatedQuestions: "destiny/repeated-questions",
+  decisionPatterns: "destiny/decision-patterns",
+  lifeChart: "user/life-chart-interpretations",
+  preferences: "user/preferences",
+  productDirection: "product/current-direction",
+} as const;
+
+function today() {
+  return new Date().toISOString().slice(0, 10);
 }
 
-// ==================== 分析函数 ====================
-
-interface AnalysisResult {
-  isCorrection: boolean
-  correctionContent: string | null
-  topics: string[]
-  emotions: string[]
-  isImportantEvent: boolean
-  eventSummary: string | null
+function appendEntry(existing: string, title: string, entry: string) {
+  return existing ? `${existing}\n${entry}` : `# ${title}\n\n${entry}`;
 }
 
-function analyzeMessage(userMessage: string, aiReply: string): AnalysisResult {
-  const msgLower = userMessage.toLowerCase()
+function writePage({
+  slug,
+  title,
+  tags,
+  entry,
+  editSummary,
+  relatedSlugs = [],
+  sourceMessageIds,
+  sourceQuotes,
+}: {
+  slug: string;
+  title: string;
+  tags: string[];
+  entry: string;
+  editSummary: string;
+  relatedSlugs?: string[];
+  sourceMessageIds: string[];
+  sourceQuotes: string[];
+}): WikiUpdate {
+  const existing = getWikiPages().find((page) => page.slug === slug);
+  upsertWikiPage({
+    slug,
+    title,
+    tags,
+    contentMd: appendEntry(existing?.contentMd ?? "", title, entry),
+    relatedSlugs,
+    sourceMessageIds: [...new Set([...(existing?.sourceMessageIds ?? []), ...sourceMessageIds])],
+    sourceQuotes: [...new Set([...(existing?.sourceQuotes ?? []), ...sourceQuotes])].slice(-12),
+  });
+  addWikiEdit({ pageSlug: slug, editSummary });
+  return { slug, title, action: existing ? "updated" : "created", editSummary };
+}
 
-  // 1. 纠正检测
-  const correctionPatterns = [
-    { pattern: /不对[，,]?(.*)/, group: 1 },
-    { pattern: /不是这样[，,]?(.*)/, group: 1 },
-    { pattern: /你应该(.*)/, group: 1 },
-    { pattern: /别这样[，,]?(.*)/, group: 1 },
-    { pattern: /不要(.*)/, group: 1 },
-    { pattern: /错了[，,]?(.*)/, group: 1 },
-    { pattern: /以后(.*)/, group: 1 },
-    { pattern: /下次(.*)/, group: 1 },
-  ]
+function correctionRule(message: string) {
+  if (/AI 男友|男友|伴侣/.test(message)) {
+    return "用户明确纠正：不要把产品理解成 AI 男友。正确理解是命谱数字人、长期记忆机制和 Relationship Wiki。";
+  }
+  if (/玄学/.test(message)) {
+    return "用户希望 Echo 避免过度玄学化表达，优先给具体、清晰、可执行的判断。";
+  }
+  if (/产品经理|产品分析|具体/.test(message)) {
+    return "用户偏好更具体、像产品经理一样的分析，少给抽象鼓励。";
+  }
+  return `用户对未来回应方式作出纠正：${message}`;
+}
 
-  let isCorrection = false
-  let correctionContent: string | null = null
+export async function runMemoryWriter(input: MemoryWriterInput): Promise<MemoryWriterResult> {
+  const { userMessage, assistantMessage, conversationType } = input;
 
-  for (const { pattern, group } of correctionPatterns) {
-    const match = userMessage.match(pattern)
-    if (match && match[group]) {
-      isCorrection = true
-      correctionContent = match[group].trim()
-      break
-    }
+  if (!shouldWriteLongTermMemory(conversationType, userMessage.content)) {
+    return {
+      shouldWrite: false,
+      reason: conversationType === "casual" ? "casual_reaction_no_long_term_value" : "no_long_term_value",
+    };
   }
 
-  if (isCorrection && !correctionContent) {
-    correctionContent = userMessage
+  const date = today();
+  const sourceMessageIds = [userMessage.id, assistantMessage.id];
+  const sourceQuotes = [userMessage.content];
+  const updates: WikiUpdate[] = [];
+  const entry = `- [${date}] 用户说：「${userMessage.content}」\n  Echo 回应摘要：${assistantMessage.content.slice(0, 160)}`;
+
+  if (conversationType === "correction" || conversationType === "preference") {
+    updates.push(
+      writePage({
+        slug: PAGE.rules,
+        title: "Future Response Rules",
+        tags: ["correction", "preference", "rules"],
+        entry: `- [${date}] ${correctionRule(userMessage.content)}`,
+        editSummary: "记录用户对未来回应方式的纠正",
+        relatedSlugs: [PAGE.preferences, PAGE.productDirection],
+        sourceMessageIds,
+        sourceQuotes,
+      }),
+    );
+    updates.push(
+      writePage({
+        slug: PAGE.preferences,
+        title: "User Preferences",
+        tags: ["preference"],
+        entry: `- [${date}] ${userMessage.content}`,
+        editSummary: "更新用户长期偏好",
+        relatedSlugs: [PAGE.rules],
+        sourceMessageIds,
+        sourceQuotes,
+      }),
+    );
   }
 
-  // 2. 话题检测
-  const topicKeywords: Record<string, string[]> = {
-    '工作': ['工作', '职业', 'career', 'job', '上班', '公司', '同事', '领导', '薪资', '面试'],
-    '情绪': ['情绪', '感觉', '心情', '开心', '难过', '焦虑', '压力', '疲惫', '兴奋', '害怕'],
-    '关系': ['关系', '朋友', '家人', '父母', '伴侣', '恋爱', '分手', '结婚', '孩子'],
-    '健康': ['健康', '身体', '睡眠', '运动', '生病', '医院', '饮食', '体重'],
-    '学习': ['学习', '读书', '课程', '技能', '知识', '考试', '证书', '培训'],
-    '财务': ['钱', '财务', '存款', '投资', '贷款', '房贷', '消费', '理财'],
-    '目标': ['目标', '计划', '梦想', '未来', '规划', '方向', '理想'],
-    '自我': ['自我', '成长', '改变', '突破', '瓶颈', '迷茫', '价值', '意义'],
+  if (conversationType === "product_direction" || /产品|AI|MVP|记忆机制|连续对话/.test(userMessage.content)) {
+    updates.push(
+      writePage({
+        slug: PAGE.productDirection,
+        title: "Product Current Direction",
+        tags: ["product", "direction"],
+        entry,
+        editSummary: "更新产品方向记忆",
+        relatedSlugs: [PAGE.rules, PAGE.openThreads],
+        sourceMessageIds,
+        sourceQuotes,
+      }),
+    );
   }
 
-  const topics: string[] = []
-  for (const [topic, keywords] of Object.entries(topicKeywords)) {
-    if (keywords.some((kw) => msgLower.includes(kw))) {
-      topics.push(topic)
-    }
+  if (conversationType === "life_direction" || conversationType === "life_chart_question" || conversationType === "emotion") {
+    updates.push(
+      writePage({
+        slug: PAGE.currentTheme,
+        title: "Current Theme",
+        tags: ["destiny", "theme"],
+        entry,
+        editSummary: "更新当前命谱主题",
+        relatedSlugs: [PAGE.repeatedQuestions, PAGE.decisionPatterns],
+        sourceMessageIds,
+        sourceQuotes,
+      }),
+    );
   }
 
-  // 3. 情绪检测
-  const emotionKeywords = {
-    '焦虑': ['焦虑', '担心', '不安', '紧张', '压力'],
-    '开心': ['开心', '高兴', '快乐', '兴奋', '满足'],
-    '难过': ['难过', '伤心', '失望', '沮丧', '低落'],
-    '迷茫': ['迷茫', '困惑', '不知道', '不确定', '纠结'],
-    '平静': ['平静', '放松', '安心', '释然'],
-    '愤怒': ['生气', '愤怒', '烦', '讨厌', '恨'],
+  if (conversationType === "life_direction" || conversationType === "emotion") {
+    updates.push(
+      writePage({
+        slug: PAGE.repeatedQuestions,
+        title: "Repeated Questions",
+        tags: ["destiny", "questions"],
+        entry: `- [${date}] ${userMessage.content}`,
+        editSummary: "记录反复出现的问题或情绪",
+        relatedSlugs: [PAGE.currentTheme],
+        sourceMessageIds,
+        sourceQuotes,
+      }),
+    );
   }
 
-  const emotions: string[] = []
-  for (const [emotion, keywords] of Object.entries(emotionKeywords)) {
-    if (keywords.some((kw) => msgLower.includes(kw))) {
-      emotions.push(emotion)
-    }
+  if (conversationType === "relationship") {
+    updates.push(
+      writePage({
+        slug: PAGE.currentState,
+        title: "Relationship Current State",
+        tags: ["relationship", "state"],
+        entry,
+        editSummary: "更新关系当前状态",
+        relatedSlugs: [PAGE.timeline, PAGE.openThreads],
+        sourceMessageIds,
+        sourceQuotes,
+      }),
+    );
+    updates.push(
+      writePage({
+        slug: PAGE.openThreads,
+        title: "Open Threads",
+        tags: ["relationship", "threads"],
+        entry: `- [${date}] 未完成关系话题：${userMessage.content}`,
+        editSummary: "记录未完成关系话题",
+        relatedSlugs: [PAGE.currentState],
+        sourceMessageIds,
+        sourceQuotes,
+      }),
+    );
   }
 
-  // 4. 重要事件检测
-  const importantPatterns = [
-    /我决定了/,
-    /我辞职了/,
-    /我入职了/,
-    /我分手了/,
-    /我结婚了/,
-    /我搬家了/,
-    /我买[了]/,
-    /重大/,
-    /里程碑/,
-    /第一次/,
-  ]
+  const activeMemoryPatch = [
+    "# Active Memory",
+    "",
+    conversationType === "casual"
+      ? "用户正在进行轻量闲聊。普通闲聊只进入 Recent Messages，不写入长期记忆。"
+      : `用户最新重要主题：${userMessage.content}`,
+    "",
+    "当前最高优先级：支持自然连续对话，遵守用户纠正，只把有长期价值的信息写入 Memory。",
+  ].join("\n");
 
-  const isImportantEvent = importantPatterns.some((p) => p.test(userMessage))
-  const eventSummary = isImportantEvent ? userMessage.slice(0, 200) : null
+  updateActiveMemory({
+    currentTheme:
+      conversationType === "product_direction"
+        ? "产品连续对话与长期记忆机制"
+        : conversationType === "relationship"
+          ? "重要关系与边界判断"
+          : conversationType === "correction" || conversationType === "preference"
+            ? "未来回应规则更新"
+            : "命谱主题与现实行动",
+    contentMd: activeMemoryPatch,
+  });
 
   return {
-    isCorrection,
-    correctionContent,
-    topics,
-    emotions,
-    isImportantEvent,
-    eventSummary,
-  }
+    shouldWrite: true,
+    reason: "long_term_value_detected",
+    updates,
+    activeMemoryPatch,
+  };
 }
 
-// ==================== Wiki 更新逻辑 ====================
-
-function applyUpdates(
-  analysis: AnalysisResult,
-  userMessage: string,
-  aiReply: string,
-  existingPages: WikiPage[]
-): WikiUpdate[] {
-  const updates: WikiUpdate[] = []
-  const now = new Date().toISOString()
-
-  // 1. 纠正 → 更新 rules/future-response-rules
-  if (analysis.isCorrection && analysis.correctionContent) {
-    const slug = 'rules/future-response-rules'
-    const existing = existingPages.find((p) => p.slug === slug)
-
-    const existingContent = existing?.contentMd ?? ''
-    const newRule = `- [${now.slice(0, 10)}] 用户纠正：${analysis.correctionContent}（原文：「${userMessage}」）`
-    const updatedContent = existingContent
-      ? `${existingContent}\n${newRule}`
-      : `# 未来回应规则\n\n${newRule}`
-
-    upsertWikiPage({
-      slug,
-      title: 'Future Response Rules',
-      contentMd: updatedContent,
-      tags: ['rules', 'correction', 'auto-generated'],
-    })
-
-    addWikiEdit({
-      pageSlug: slug,
-      editSummary: `用户纠正：${analysis.correctionContent}`,
-    })
-
-    updates.push({
-      slug,
-      title: 'Future Response Rules',
-      action: existing ? 'updated' : 'created',
-      editSummary: `用户纠正：${analysis.correctionContent}`,
-    })
-  }
-
-  // 2. 话题 → 创建/更新话题页面
-  for (const topic of analysis.topics) {
-    const slug = `topics/${topic.toLowerCase()}`
-    const existing = existingPages.find((p) => p.slug === slug)
-
-    const existingContent = existing?.contentMd ?? ''
-    const newEntry = `- [${now.slice(0, 10)}] 用户提到：「${userMessage.slice(0, 150)}」`
-    const updatedContent = existingContent
-      ? `${existingContent}\n${newEntry}`
-      : `# ${topic}\n\n${newEntry}`
-
-    upsertWikiPage({
-      slug,
-      title: topic,
-      contentMd: updatedContent,
-      tags: ['topic', 'auto-generated'],
-    })
-
-    addWikiEdit({
-      pageSlug: slug,
-      editSummary: `对话更新：${topic}`,
-    })
-
-    updates.push({
-      slug,
-      title: topic,
-      action: existing ? 'updated' : 'created',
-      editSummary: `对话更新：${topic}`,
-    })
-  }
-
-  // 3. 情绪 → 更新 emotional-state 页面
-  if (analysis.emotions.length > 0) {
-    const slug = 'emotional-state'
-    const existing = existingPages.find((p) => p.slug === slug)
-
-    const emotionStr = analysis.emotions.join('、')
-    const existingContent = existing?.contentMd ?? ''
-    const newEntry = `- [${now.slice(0, 10)}] 情绪状态：${emotionStr}（触发消息：「${userMessage.slice(0, 100)}」）`
-    const updatedContent = existingContent
-      ? `${existingContent}\n${newEntry}`
-      : `# 情绪状态追踪\n\n${newEntry}`
-
-    upsertWikiPage({
-      slug,
-      title: 'Emotional State',
-      contentMd: updatedContent,
-      tags: ['emotion', 'auto-generated'],
-    })
-
-    addWikiEdit({
-      pageSlug: slug,
-      editSummary: `情绪更新：${emotionStr}`,
-    })
-
-    updates.push({
-      slug,
-      title: 'Emotional State',
-      action: existing ? 'updated' : 'created',
-      editSummary: `情绪更新：${emotionStr}`,
-    })
-  }
-
-  // 4. 重要事件 → 更新 life-events 页面
-  if (analysis.isImportantEvent && analysis.eventSummary) {
-    const slug = 'life-events'
-    const existing = existingPages.find((p) => p.slug === slug)
-
-    const existingContent = existing?.contentMd ?? ''
-    const newEntry = `- [${now.slice(0, 10)}] 重要事件：${analysis.eventSummary}`
-    const updatedContent = existingContent
-      ? `${existingContent}\n${newEntry}`
-      : `# 重要生命事件\n\n${newEntry}`
-
-    upsertWikiPage({
-      slug,
-      title: 'Life Events',
-      contentMd: updatedContent,
-      tags: ['events', 'auto-generated'],
-    })
-
-    addWikiEdit({
-      pageSlug: slug,
-      editSummary: `重要事件记录`,
-    })
-
-    updates.push({
-      slug,
-      title: 'Life Events',
-      action: existing ? 'updated' : 'created',
-      editSummary: `重要事件记录`,
-    })
-  }
-
-  return updates
-}
-
-// ==================== 主函数 ====================
-
-export async function updateRelationshipWiki(input: WikiUpdateInput): Promise<WikiUpdate[]> {
-  const { userMessage, aiReply, existingWikiPages } = input
-
-  // 分析消息
-  const analysis = analyzeMessage(userMessage, aiReply)
-
-  // 应用更新
-  const updates = applyUpdates(analysis, userMessage, aiReply, existingWikiPages)
-
-  return updates
+export function queueMemoryWriter(input: MemoryWriterInput) {
+  setTimeout(() => {
+    runMemoryWriter(input).catch((error) => {
+      console.error("[memory-writer] failed", error);
+    });
+  }, 0);
 }
