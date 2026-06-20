@@ -120,3 +120,13 @@ npm run start
 - A real product demo should connect a server-side TTS provider, preferably a Chinese-optimized service such as CosyVoice / Bailian TTS, and return playable audio instead of relying on browser voices.
 - The current non-blocking contract should stay the same: text appears first, TTS starts afterward, and TTS failure never blocks chat.
 - The future voice layer should expose `voiceId`, speaking style, speed, and emotion intensity as user or agent preferences.
+
+## Conversation Repair After Bad Dialogue Test
+
+- Added explicit routing for meta/frustration/action-request turns.
+- Casual, frustration, meta, action-request, and relationship turns now use deterministic guarded replies instead of allowing the remote model to over-analyze.
+- Echo now stops and repairs when users ask “什么意思”, “你在干什么”, or express anger.
+- Weekend/action prompts now receive concrete lightweight plans instead of Life Chart analysis.
+- Relationship uncertainty now gets a grounded boundary exercise and no invented astrology, collaborator labels, or relationship facts.
+- The LLM layer now rejects responses that invent unsupported astrology or relationship labels.
+- Echo prompt now explicitly forbids emoji, unsupported zodiac/house/five-elements claims, invented relationships, and forced Life Chart references.

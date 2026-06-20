@@ -2,6 +2,9 @@ import type { ActiveMemory, LifeChart, Message, RelationshipItem, WikiPage } fro
 
 export type ConversationType =
   | "casual"
+  | "meta"
+  | "frustration"
+  | "action_request"
   | "life_direction"
   | "relationship"
   | "emotion"
@@ -30,6 +33,14 @@ export function classifyConversation(message: string): ConversationType {
   const text = message.trim();
   if (!text) return "unknown";
 
+  if (hasAny(text, [/傻逼|垃圾|狗屎|你在干什么|你干嘛|啥意思|什么意思|你是什么意思|听不懂|没懂|别扯|别乱说|你有病/])) {
+    return "frustration";
+  }
+
+  if (hasAny(text, [/你在干什么|你能干什么|你是谁|你现在.*干嘛|你到底.*干嘛/])) {
+    return "meta";
+  }
+
   if (hasAny(text, [/不要/, /不是.*意思/, /不对/, /纠正/, /以后/, /下次/, /你理解错/, /别.*玄学/, /别把/])) {
     return "correction";
   }
@@ -51,6 +62,10 @@ export function classifyConversation(message: string): ConversationType {
     hasAny(text, [/哈哈+/, /^哈+$/, /你在吗/, /刚醒/, /随便聊/, /轻松点/, /不知道该干嘛/, /今天.*困/, /早|晚|你好|hi|hello/i])
   ) {
     return "casual";
+  }
+
+  if (hasAny(text, [/今天.*干什么/, /周[一二三四五六日天末].*干什么/, /建议我.*干什么/, /我该干什么/, /做什么/, /安排一下/, /给我.*安排/, /今天.*先做/])) {
+    return "action_request";
   }
 
   if (hasAny(text, [/适合.*方向/, /转向/, /职业/, /人生/, /未来/, /以后.*做什么/, /该不该/, /选择/])) {
@@ -131,6 +146,9 @@ function summarizeRelationships(items: RelationshipItem[]) {
 function relevantPages(pages: WikiPage[], type: ConversationType) {
   const priorityByType: Record<ConversationType, string[]> = {
     casual: ["rules/future-response-rules", "user/preferences"],
+    meta: ["rules/future-response-rules", "user/preferences"],
+    frustration: ["rules/future-response-rules", "user/preferences"],
+    action_request: ["rules/future-response-rules", "user/preferences", "destiny/current-theme"],
     correction: ["rules/future-response-rules", "user/preferences", "product/current-direction"],
     preference: ["user/preferences", "rules/future-response-rules"],
     product_direction: ["product/current-direction", "rules/future-response-rules", "destiny/current-theme"],
