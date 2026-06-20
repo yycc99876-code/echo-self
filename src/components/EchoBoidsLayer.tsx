@@ -78,7 +78,7 @@ export function EchoBoidsLayer() {
     const geometry = createFishShadowGeometry();
     const material = new THREE.MeshBasicMaterial({
       transparent: true,
-      opacity: 0.72,
+      opacity: 0.035,
       depthWrite: false,
       blending: THREE.NormalBlending,
       vertexColors: true,
@@ -86,20 +86,19 @@ export function EchoBoidsLayer() {
     });
     const mesh = new THREE.InstancedMesh(geometry, material, count);
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    scene.add(mesh);
 
     const fishTexture = createFishTexture();
     const sprites = boids.map((boid, index) => {
       const spriteMaterial = new THREE.SpriteMaterial({
         map: fishTexture,
-        color: boid.color,
+        color: new THREE.Color("#ffffff"),
         transparent: true,
-        opacity: index % 7 === 0 ? 0.42 : 0.36,
+        opacity: index % 7 === 0 ? 0.34 : 0.24,
         depthWrite: false,
-        blending: THREE.AdditiveBlending,
+        blending: THREE.NormalBlending,
       });
       const sprite = new THREE.Sprite(spriteMaterial);
-      sprite.scale.setScalar(boid.scale * 0.72);
+      sprite.scale.set(boid.scale * 1.25, boid.scale * 0.6, 1);
       scene.add(sprite);
       return sprite;
     });
@@ -196,8 +195,8 @@ export function EchoBoidsLayer() {
 
         const sprite = sprites[i];
         sprite.position.copy(boid.position);
-        sprite.scale.set(boid.scale * 0.95, boid.scale * 0.36, 1);
-        (sprite.material as THREE.SpriteMaterial).rotation = Math.atan2(boid.velocity.y, boid.velocity.x);
+        sprite.scale.set(boid.scale * 1.42, boid.scale * 0.68, 1);
+        (sprite.material as THREE.SpriteMaterial).rotation = Math.atan2(boid.velocity.y, boid.velocity.x) + Math.PI;
 
         const trailIndex = i * 3;
         const trail = boid.position.clone().addScaledVector(boid.velocity.clone().normalize(), -0.62);
@@ -452,32 +451,11 @@ function createFishShadowGeometry() {
 }
 
 function createFishTexture() {
-  const canvas = document.createElement("canvas");
-  canvas.width = 96;
-  canvas.height = 40;
-  const context = canvas.getContext("2d");
-  if (!context) return new THREE.CanvasTexture(canvas);
-
-  const gradient = context.createLinearGradient(12, 20, 88, 20);
-  gradient.addColorStop(0, "rgba(255,255,255,0)");
-  gradient.addColorStop(0.22, "rgba(175,199,232,0.22)");
-  gradient.addColorStop(0.62, "rgba(236,239,242,0.72)");
-  gradient.addColorStop(1, "rgba(255,255,255,0)");
-
-  context.fillStyle = gradient;
-  context.beginPath();
-  context.moveTo(90, 20);
-  context.bezierCurveTo(58, 3, 26, 5, 8, 20);
-  context.bezierCurveTo(28, 34, 58, 36, 90, 20);
-  context.fill();
-
-  context.fillStyle = "rgba(255,255,255,0.34)";
-  context.beginPath();
-  context.arc(70, 18, 2.2, 0, Math.PI * 2);
-  context.fill();
-
-  const texture = new THREE.CanvasTexture(canvas);
+  const texture = new THREE.TextureLoader().load("/echo-fish.png");
   texture.colorSpace = THREE.SRGBColorSpace;
+  texture.generateMipmaps = true;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
   texture.needsUpdate = true;
   return texture;
 }
