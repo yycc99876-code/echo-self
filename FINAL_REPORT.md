@@ -133,6 +133,19 @@ Recommended next voice direction:
 - Return audio URL or stream.
 - Keep browser TTS only as fallback.
 
+## Echo Stage Visual Pass
+
+This pass refined the Echo stage around the current product direction:
+
+- The Echo page now has one primary entrance: the conversation box.
+- The latest user message renders above Echo's answer, matching real dialogue order.
+- Echo answers are no longer clipped by the composer; long replies live inside a readable transcript area.
+- The browser TTS can be interrupted by typing, voice input, or sending a new message.
+- The old central particle effect was dimmed and reduced so it behaves like a distant identity signal.
+- Added `EchoBoidsLayer`, a transparent Three.js background layer using clean-room boids logic: alignment, cohesion, separation, boundary steering, and turn limiting.
+- The boids layer is pointer-event free, transparent, slow, and hidden under `prefers-reduced-motion`.
+- The implementation does not include the reference project's control panel, aquarium, floor, obstacles, or OrbitControls.
+
 ## Next Product Step
 
 The next important product leap is not another page. It is an evolution loop:
