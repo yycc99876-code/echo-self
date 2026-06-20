@@ -669,11 +669,11 @@ button:disabled {
 .echo-boids-layer {
   position: absolute;
   inset: 0;
-  z-index: 1;
+  z-index: 3;
   pointer-events: none;
-  opacity: 0.34;
-  mix-blend-mode: screen;
-  filter: blur(0.15px);
+  opacity: 0.62;
+  mix-blend-mode: lighten;
+  filter: blur(0.05px);
 }
 
 .echo-boids-layer canvas {
@@ -694,7 +694,7 @@ button:disabled {
 }
 
 .echo-stage {
-  z-index: 4;
+  z-index: 5;
   grid-template-rows: minmax(185px, 29vh) auto minmax(0, 1fr) auto;
   align-content: start;
   padding: 2.5vh 24px 128px;

@@ -11,8 +11,8 @@ type Boid = {
 };
 
 const SETTINGS = {
-  minSpeed: 0.22,
-  maxSpeed: 0.62,
+  minSpeed: 0.18,
+  maxSpeed: 0.48,
   maxTurnRate: 0.82,
   perceptionRadius: 3.7,
   avoidanceRadius: 1.08,
@@ -50,25 +50,58 @@ export function EchoBoidsLayer() {
     const scene = new THREE.Scene();
     scene.background = null;
 
-    const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
-    camera.position.set(0, 0.8, 25);
+    const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
+    camera.position.set(0, 0.6, 20);
 
-    const bounds = new THREE.Vector3(18, 7.6, 10);
+    const bounds = new THREE.Vector3(15, 6.6, 8);
     const isMobile = window.innerWidth < 760;
-    const count = isMobile ? 22 : 58;
+    const count = isMobile ? 24 : 64;
     const boids = createBoids(count, bounds);
 
     const geometry = createFishShadowGeometry();
     const material = new THREE.MeshBasicMaterial({
       transparent: true,
-      opacity: 0.42,
+      opacity: 0.72,
       depthWrite: false,
-      blending: THREE.AdditiveBlending,
+      blending: THREE.NormalBlending,
       vertexColors: true,
+      side: THREE.DoubleSide,
     });
     const mesh = new THREE.InstancedMesh(geometry, material, count);
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     scene.add(mesh);
+
+    const fishTexture = createFishTexture();
+    const sprites = boids.map((boid, index) => {
+      const spriteMaterial = new THREE.SpriteMaterial({
+        map: fishTexture,
+        color: boid.color,
+        transparent: true,
+        opacity: index % 7 === 0 ? 0.42 : 0.36,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      });
+      const sprite = new THREE.Sprite(spriteMaterial);
+      sprite.scale.setScalar(boid.scale * 0.72);
+      scene.add(sprite);
+      return sprite;
+    });
+
+    const trailGeometry = new THREE.BufferGeometry();
+    const trailPositions = new Float32Array(count * 3);
+    const trailColors = new Float32Array(count * 3);
+    trailGeometry.setAttribute("position", new THREE.BufferAttribute(trailPositions, 3));
+    trailGeometry.setAttribute("color", new THREE.BufferAttribute(trailColors, 3));
+    const trailMaterial = new THREE.PointsMaterial({
+      size: isMobile ? 0.035 : 0.05,
+      transparent: true,
+      opacity: 0.52,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      vertexColors: true,
+    });
+    const trails = new THREE.Points(trailGeometry, trailMaterial);
+    scene.add(trails);
 
     const dummy = new THREE.Object3D();
     const clock = new THREE.Clock();
@@ -105,10 +138,26 @@ export function EchoBoidsLayer() {
         dummy.updateMatrix();
         mesh.setMatrixAt(i, dummy.matrix);
         mesh.setColorAt(i, boid.color);
+
+        const sprite = sprites[i];
+        sprite.position.copy(boid.position);
+        sprite.scale.set(boid.scale * 0.95, boid.scale * 0.36, 1);
+        (sprite.material as THREE.SpriteMaterial).rotation = Math.atan2(boid.velocity.y, boid.velocity.x);
+
+        const trailIndex = i * 3;
+        const trail = boid.position.clone().addScaledVector(boid.velocity.clone().normalize(), -0.62);
+        trailPositions[trailIndex] = trail.x;
+        trailPositions[trailIndex + 1] = trail.y;
+        trailPositions[trailIndex + 2] = trail.z;
+        trailColors[trailIndex] = boid.color.r;
+        trailColors[trailIndex + 1] = boid.color.g;
+        trailColors[trailIndex + 2] = boid.color.b;
       }
 
       mesh.instanceMatrix.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+      trailGeometry.attributes.position.needsUpdate = true;
+      trailGeometry.attributes.color.needsUpdate = true;
       renderer.render(scene, camera);
       frame = requestAnimationFrame(animate);
     }
@@ -120,6 +169,12 @@ export function EchoBoidsLayer() {
       observer.disconnect();
       geometry.dispose();
       material.dispose();
+      trailGeometry.dispose();
+      trailMaterial.dispose();
+      fishTexture.dispose();
+      sprites.forEach((sprite) => {
+        (sprite.material as THREE.SpriteMaterial).dispose();
+      });
       renderer.dispose();
       mesh.clear();
       scene.clear();
@@ -138,9 +193,9 @@ function createBoids(count: number, bounds: THREE.Vector3) {
 
   for (let i = 0; i < count; i += 1) {
     const position = new THREE.Vector3(
-      randomBetween(-bounds.x * 0.72, bounds.x * 0.72),
-      randomBetween(-bounds.y * 0.58, bounds.y * 0.62),
-      randomBetween(-bounds.z * 0.85, bounds.z * 0.1),
+      randomBetween(-bounds.x * 0.88, bounds.x * 0.88),
+      randomBetween(-bounds.y * 0.74, bounds.y * 0.42),
+      randomBetween(-bounds.z * 0.68, bounds.z * 0.18),
     );
     const direction = randomUnitVector();
     const speed = randomBetween(SETTINGS.minSpeed, SETTINGS.maxSpeed);
@@ -149,7 +204,7 @@ function createBoids(count: number, bounds: THREE.Vector3) {
     boids.push({
       position,
       velocity: direction.multiplyScalar(speed),
-      scale: randomBetween(0.34, 0.74) * (i % 7 === 0 ? 1.18 : 1),
+      scale: randomBetween(0.74, 1.28) * (i % 7 === 0 ? 1.14 : 1),
       color,
     });
   }
@@ -245,19 +300,50 @@ function boundarySteer(position: THREE.Vector3, bounds: THREE.Vector3, margin: n
 function createFishShadowGeometry() {
   const geometry = new THREE.BufferGeometry();
   const vertices = new Float32Array([
-    0, 0, 0.62,
-    -0.18, 0.045, -0.18,
-    0.18, -0.045, -0.18,
-    -0.12, 0.025, -0.15,
-    -0.34, 0.075, -0.5,
-    -0.22, 0, -0.38,
-    0.12, -0.025, -0.15,
-    0.34, -0.075, -0.5,
-    0.22, 0, -0.38,
+    0, 0, 0.72,
+    -0.08, 0.045, 0.05,
+    0.08, -0.045, 0.05,
+    -0.08, 0.035, 0.03,
+    -0.48, 0.095, -0.68,
+    -0.2, 0, -0.42,
+    0.08, -0.035, 0.03,
+    0.48, -0.095, -0.68,
+    0.2, 0, -0.42,
   ]);
   geometry.setAttribute("position", new THREE.BufferAttribute(vertices, 3));
   geometry.computeVertexNormals();
   return geometry;
+}
+
+function createFishTexture() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 96;
+  canvas.height = 40;
+  const context = canvas.getContext("2d");
+  if (!context) return new THREE.CanvasTexture(canvas);
+
+  const gradient = context.createLinearGradient(12, 20, 88, 20);
+  gradient.addColorStop(0, "rgba(255,255,255,0)");
+  gradient.addColorStop(0.22, "rgba(175,199,232,0.22)");
+  gradient.addColorStop(0.62, "rgba(236,239,242,0.72)");
+  gradient.addColorStop(1, "rgba(255,255,255,0)");
+
+  context.fillStyle = gradient;
+  context.beginPath();
+  context.moveTo(90, 20);
+  context.bezierCurveTo(58, 3, 26, 5, 8, 20);
+  context.bezierCurveTo(28, 34, 58, 36, 90, 20);
+  context.fill();
+
+  context.fillStyle = "rgba(255,255,255,0.34)";
+  context.beginPath();
+  context.arc(70, 18, 2.2, 0, Math.PI * 2);
+  context.fill();
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.needsUpdate = true;
+  return texture;
 }
 
 function randomUnitVector() {
