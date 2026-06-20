@@ -20,14 +20,14 @@ export function IdentityCard({ status }: { status: EchoStatus }) {
         <div className="min-w-0 flex-1">
           <div className="font-label text-[11px] text-[var(--text-faint)]">LIFE CHART AVATAR</div>
           <h2 className="mt-1 text-xl font-semibold text-[var(--text-primary)]">Echo</h2>
-          <p className="mt-1 text-sm text-[var(--text-tertiary)]">和你的命谱数字人对话</p>
+          <p className="mt-1 text-sm text-[var(--text-tertiary)]">一个只为你校准的命谱数字人</p>
         </div>
         <div className="rounded-full border border-[var(--border-subtle)] bg-[var(--bg-input)] px-3 py-1.5">
           <span className="font-label text-[11px] text-[var(--accent)]">{labels[status]}</span>
         </div>
       </div>
       <p className="mt-5 text-sm leading-relaxed text-[var(--text-secondary)]">
-        我会基于你的 Life Chart、对话记忆和重要关系，陪你理解当下的问题。我不会替你做决定，但会帮你看见反复出现的主题。
+        你不用一上来就讲大道理。说一句今天的真实状态就行，我会从 Life Chart、近期对话和长期记忆里，慢慢帮你看见那些反复出现的线索。
       </p>
     </section>
   );

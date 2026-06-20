@@ -104,3 +104,19 @@ npm run start
 - Avatar: replace the `GL` monogram in `IdentityCard`.
 - Voice: replace `src/lib/tts.ts` with a custom TTS provider while keeping the same non-blocking playback contract.
 - Future voice cloning should store a `voiceId` preference, not block chat rendering, and fall back to browser TTS.
+
+## Opening Voice & Product Tone
+
+- The home entry now starts from conversation instead of forcing the user to fill a form first.
+- Echo opening copy now invites the user to say a real current-state sentence, such as waking up confused, feeling stuck, or wanting to talk lightly.
+- The missing Life Chart state no longer feels like an error. It frames Echo as “still learning you” and lets the user continue talking.
+- Chat feedback is warmer: durable memories are described as “worth keeping” signals; casual turns stay in recent conversation without polluting the archive.
+- Preset prompts now include light, low-pressure starters, not only serious life-direction questions.
+- Echo's prompt now prioritizes natural, spoken, warm responses for casual chat and avoids forcing every turn into destiny analysis.
+
+## TTS Direction
+
+- Current playback still uses browser SpeechSynthesis as a fallback, which is why the voice can sound stiff or “web-like”.
+- A real product demo should connect a server-side TTS provider, preferably a Chinese-optimized service such as CosyVoice / Bailian TTS, and return playable audio instead of relying on browser voices.
+- The current non-blocking contract should stay the same: text appears first, TTS starts afterward, and TTS failure never blocks chat.
+- The future voice layer should expose `voiceId`, speaking style, speed, and emotion intensity as user or agent preferences.

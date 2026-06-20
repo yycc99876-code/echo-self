@@ -3,18 +3,18 @@ import Link from "next/link";
 const steps = [
   {
     index: "01",
-    title: "先建立 Life Chart",
-    body: "用一个当前问题、情绪状态和陪伴偏好，给 Echo 一个初始理解框架。",
+    title: "先说一句真实状态",
+    body: "不用先填完表，也不用想好问题。你可以从“我刚醒”“今天很烦”“我有点兴奋”开始。",
   },
   {
     index: "02",
-    title: "再进入 Echo 对话",
-    body: "闲聊可以轻松回应；重要问题会结合 Life Chart、记忆和关系上下文。",
+    title: "Echo 边聊边校准",
+    body: "闲聊留在近期对话；重要偏好、纠正、关系和长期目标会进入记忆，影响以后怎么回应你。",
   },
   {
     index: "03",
-    title: "重要内容沉淀为 Memory",
-    body: "纠正、长期偏好、产品方向和关系问题会写入档案，普通闲聊不会污染长期记忆。",
+    title: "慢慢形成你的档案",
+    body: "Life Chart 是起点，不是表格任务。它会在真实对话里被补全、修正、变得越来越像你。",
   },
 ];
 
@@ -30,14 +30,14 @@ export default function Home() {
             你的命谱数字人。
           </h1>
           <p className="mt-6 max-w-2xl text-base leading-8 text-[var(--text-secondary)]">
-            这个产品不是让你先进聊天室瞎聊，而是先建立一份 Life Chart 档案，再让 Echo 带着档案、长期记忆和关系上下文与你连续对话。
+            Echo Self 不是让你先面对一堆选项。你先说一句当下状态，Echo 会在对话里认识你、校准你，并把真正重要的线索沉淀成长期档案。
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Link href="/life-chart" className="primary-button">
-              第一步：建立 Life Chart
+            <Link href="/echo" className="primary-button">
+              先和 Echo 说一句
             </Link>
-            <Link href="/echo" className="secondary-button">
-              已有档案，进入 Echo
+            <Link href="/life-chart" className="secondary-button">
+              手动编辑 Life Chart
             </Link>
           </div>
         </div>
@@ -54,7 +54,7 @@ export default function Home() {
             ))}
           </div>
           <p className="mt-5 border-t border-[var(--border-subtle)] pt-4 text-sm text-[var(--text-tertiary)]">
-            每一步都会进入同一份服务端档案：Life Chart 提供初始理解，Echo 产生连续对话，Memory 只保存有长期价值的变化。
+            最终目标不是“填完资料”，而是形成一套连续循环：说出状态、得到回应、夜间校准、长期记忆更新，再回到下一次更懂你的对话。
           </p>
         </div>
       </section>

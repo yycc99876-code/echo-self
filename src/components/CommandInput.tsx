@@ -22,12 +22,12 @@ export function CommandInput({
 
   function startVoice() {
     if (!supported || disabled) {
-      setVoiceMessage("当前浏览器不支持语音识别。");
+      setVoiceMessage("这个浏览器暂时听不见你，可以先打字。");
       return;
     }
 
     onVoiceState(true);
-    setVoiceMessage("正在聆听...");
+    setVoiceMessage("我在听，说完会自动发送。");
     recognitionRef.current = startSpeechRecognition({
       onResult: (text, isFinal) => {
         onChange(text);
@@ -43,7 +43,7 @@ export function CommandInput({
       },
       onError: (message) => {
         onVoiceState(false);
-        setVoiceMessage(`语音识别未完成：${message}`);
+        setVoiceMessage(`这次没听清：${message}`);
       },
     });
   }
@@ -67,26 +67,26 @@ export function CommandInput({
               onSend("text");
             }
           }}
-          placeholder="输入一个正在反复出现的问题..."
+          placeholder="说一句你现在的真实状态，或者直接问我一个卡住的问题..."
           rows={1}
           className="min-h-11 flex-1 resize-none bg-transparent px-3 py-2 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-faint)]"
         />
         <button
           type="button"
           className="icon-button"
-          title={supported ? "语音输入" : "当前浏览器不支持语音输入"}
+          title={supported ? "按下语音，说给 Echo 听" : "当前浏览器不支持语音输入"}
           onClick={voiceMessage ? stopVoice : startVoice}
           disabled={disabled}
         >
-          <span className="font-label text-xs">MIC</span>
+          <span className="font-label text-xs">VOICE</span>
         </button>
         <button type="button" className="primary-button min-w-20" onClick={() => onSend("text")} disabled={disabled || !value.trim()}>
-          发送
+          送出
         </button>
       </div>
       <div className="mt-2 flex items-center justify-between text-[11px] text-[var(--text-faint)]">
-        <span>{voiceMessage || "Enter 发送，Shift + Enter 换行"}</span>
-        <span className="font-label">voiceId: browser-default</span>
+        <span>{voiceMessage || "Enter 送出，Shift + Enter 换行。语音会先转文字，再由 Echo 回应。"}</span>
+        <span className="font-label">voice: browser fallback</span>
       </div>
     </div>
   );

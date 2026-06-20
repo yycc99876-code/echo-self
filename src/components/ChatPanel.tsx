@@ -78,7 +78,7 @@ export function ChatPanel({
 
       setStatus("speaking");
       if (response.memoryUpdateStatus === "queued") {
-        setMemoryNotice("这轮对话有长期价值，正在写入 Memory。");
+        setMemoryNotice("我抓到了一条值得留下的线索，正在放进长期记忆。");
         onMemoryUpdating("updating");
         window.setTimeout(async () => {
           const state = await fetchMemoryState();
@@ -86,10 +86,10 @@ export function ChatPanel({
           setMessages(state.messages);
           onMemoryState(state);
           onMemoryUpdating("idle");
-          setMemoryNotice("Memory 已更新。");
+          setMemoryNotice("已收进档案。下次我会带着这条线索回应你。");
         }, 1200);
       } else {
-        setMemoryNotice("这轮只是近期对话，不写入长期记忆。");
+        setMemoryNotice("这轮先留在近期对话里，不打扰你的长期档案。");
         onMemoryUpdating("skipped");
         fetchMemoryState().then((state) => {
           setMemoryState(state);
@@ -100,7 +100,7 @@ export function ChatPanel({
       stopSpeechRef.current = speakText(response.reply, () => setStatus("standby"));
     } catch {
       setStatus("standby");
-      setError("Echo 暂时没有稳定回应，请稍后再试。");
+      setError("Echo 刚才有点没接稳。再发一次，我会重新对齐。");
       onMemoryUpdating("idle");
       fetchMemoryState().then((state) => {
         setMemoryState(state);
@@ -115,19 +115,19 @@ export function ChatPanel({
       <div className="border-b border-[var(--border-subtle)] p-6">
         {!memoryState?.lifeChart ? (
           <div className="mb-4 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--archive-soft)] p-4">
-            <div className="font-label text-[11px] text-[var(--archive)]">LIFE CHART MISSING</div>
+            <div className="font-label text-[11px] text-[var(--archive)]">ECHO IS STILL LEARNING YOU</div>
             <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
-              你可以先聊天，但 Echo 还没有初始命谱档案。为了让对话真正形成连续理解，建议先建立 Life Chart。
+              现在也可以直接说话。只是我还没有你的初始档案，所以会先从几个轻问题里认识你：你是谁、正在卡在哪、希望我怎样陪你校准。
             </p>
             <a href="/life-chart" className="secondary-button mt-3 inline-block">
-              去建立 Life Chart
+              先建一份初始档案
             </a>
           </div>
         ) : (
           <div className="mb-4 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
-            <div className="font-label text-[11px] text-[var(--success)]">LIFE CHART ACTIVE</div>
+            <div className="font-label text-[11px] text-[var(--success)]">ECHO IS CALIBRATED</div>
             <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
-              Echo 正在使用 {memoryState.lifeChart.userName} 的 Life Chart 摘要、近期对话和长期 Memory 来回应。
+              我已经带着 {memoryState.lifeChart.userName} 的 Life Chart、近期对话和长期记忆在场。你可以认真问，也可以先随便说一句今天的状态。
             </p>
           </div>
         )}
@@ -140,9 +140,12 @@ export function ChatPanel({
       <div className="flex-1 overflow-y-auto px-6 py-5">
         {messages.length === 0 ? (
           <div className="mx-auto mt-10 max-w-xl rounded-[var(--radius-lg)] border border-[var(--border-subtle)] bg-[var(--bg-panel)] p-6 text-center">
-            <div className="font-label text-[11px] text-[var(--archive)]">OPENING NOTE</div>
+            <div className="font-label text-[11px] text-[var(--archive)]">FIRST SIGNAL</div>
             <p className="mt-3 text-sm leading-relaxed text-[var(--text-secondary)]">
-              我会基于你的 Life Chart、对话记忆和重要关系，陪你理解当下的问题。先选择一个预设问题，或者直接输入你正在反复想的事。
+              先不用组织成一个完美问题。你可以只告诉我：你今天醒来后的第一种感觉，或者脑子里最吵的那句话。我会从这里开始接住你。
+            </p>
+            <p className="mt-3 text-xs leading-6 text-[var(--text-tertiary)]">
+              轻松闲聊只进入近期对话；真正影响未来回应的偏好、纠正和长期主题，才会写入档案。
             </p>
           </div>
         ) : (
@@ -152,7 +155,7 @@ export function ChatPanel({
             ))}
             {status === "thinking" && (
               <div className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--archive-soft)] p-4 text-sm text-[var(--archive)]">
-                Echo 正在整理命谱和记忆...
+                我在把你的这句话和档案轻轻对齐...
               </div>
             )}
             <div ref={endRef} />
