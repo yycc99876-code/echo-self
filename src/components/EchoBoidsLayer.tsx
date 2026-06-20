@@ -16,6 +16,7 @@ type PredatorState = {
   active: boolean;
   intensity: number;
   lastMoveAt: number;
+  pressureCenter: THREE.Vector3;
 };
 
 const SETTINGS = {
@@ -31,10 +32,13 @@ const SETTINGS = {
   boundaryWeight: 1.35,
   boundaryMargin: 2.6,
   predatorRadius: 5.4,
-  predatorWeight: 2.9,
-  panicCohesionWeight: 0.72,
-  millingWeight: 0.95,
+  predatorWeight: 2.75,
+  panicCohesionWeight: 1.05,
+  millingWeight: 1.18,
   idleCenterWeight: 0.1,
+  schoolEscapeWeight: 0.58,
+  baitCenterShift: 1.45,
+  predatorFadeDelayMs: 2600,
 };
 
 const FORWARD = new THREE.Vector3(0, 0, 1);
@@ -124,6 +128,9 @@ export function EchoBoidsLayer() {
     const interactionPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
 
     function handlePointerMove(event: PointerEvent) {
+      const target = event.target;
+      if (target instanceof Element && target.closest(".echo-composer")) return;
+
       const rect = host.getBoundingClientRect();
       mouseNdc.x = ((event.clientX - rect.left) / Math.max(rect.width, 1)) * 2 - 1;
       mouseNdc.y = -(((event.clientY - rect.top) / Math.max(rect.height, 1)) * 2 - 1);
@@ -160,15 +167,18 @@ export function EchoBoidsLayer() {
       const dt = Math.min(clock.getDelta(), 1 / 24);
       const now = performance.now();
       const inactiveFor = now - predator.lastMoveAt;
-      if (inactiveFor > 120) {
-        predator.intensity = Math.max(0, predator.intensity - dt * 0.9);
+      if (inactiveFor > SETTINGS.predatorFadeDelayMs) {
+        predator.intensity = Math.max(0, predator.intensity - dt * 0.42);
+      } else if (predator.active) {
+        predator.intensity = THREE.MathUtils.lerp(predator.intensity, 1, 1 - Math.pow(0.0005, dt));
       }
       predator.active = predator.intensity > 0.02;
       predator.position.lerp(predator.target, 1 - Math.pow(0.001, dt));
+      predator.pressureCenter.lerp(predator.position, 1 - Math.pow(0.01, dt));
       predatorVisual.position.copy(predator.position);
       predatorVisual.visible = predator.active;
-      predatorVisual.scale.setScalar(0.75 + predator.intensity * 0.55);
-      (predatorVisual.material as THREE.SpriteMaterial).opacity = 0.12 + predator.intensity * 0.2;
+      predatorVisual.scale.setScalar(0.56 + predator.intensity * 0.44);
+      (predatorVisual.material as THREE.SpriteMaterial).opacity = 0.05 + predator.intensity * 0.12;
 
       updateBoids(boids, bounds, dt, predator);
       const slowDrift = performance.now() * 0.00006;
@@ -267,6 +277,16 @@ function updateBoids(boids: Boid[], bounds: THREE.Vector3, dt: number, predator:
   boids.forEach((boid) => schoolCenter.add(boid.position));
   schoolCenter.multiplyScalar(1 / Math.max(boids.length, 1));
 
+  const predatorCenter = predator.pressureCenter;
+  const schoolAwayFromPredator = schoolCenter.clone().sub(predatorCenter);
+  schoolAwayFromPredator.z = 0;
+  if (schoolAwayFromPredator.lengthSq() > 0.0001) {
+    schoolAwayFromPredator.normalize();
+  }
+  const baitCenter = schoolCenter
+    .clone()
+    .addScaledVector(schoolAwayFromPredator, SETTINGS.baitCenterShift * predator.intensity);
+
   for (let i = 0; i < boids.length; i += 1) {
     const boid = boids[i];
     const acceleration = new THREE.Vector3();
@@ -303,22 +323,37 @@ function updateBoids(boids: Boid[], bounds: THREE.Vector3, dt: number, predator:
     acceleration.add(steerTowards(schoolCenter.clone().sub(boid.position), boid.velocity).multiplyScalar(SETTINGS.idleCenterWeight));
 
     if (predator.active) {
-      const predatorOffset = boid.position.clone().sub(predator.position);
+      const predatorOffset = new THREE.Vector3(
+        boid.position.x - predatorCenter.x,
+        boid.position.y - predatorCenter.y,
+        0,
+      );
       const distance = Math.max(predatorOffset.length(), 0.001);
       const pressure = Math.max(0, 1 - distance / SETTINGS.predatorRadius) * predator.intensity;
 
       if (pressure > 0) {
         const flee = predatorOffset.normalize().multiplyScalar(pressure);
+        flee.z = (boid.position.z > predatorCenter.z ? 0.18 : -0.18) * pressure;
         acceleration.add(steerTowards(flee, boid.velocity).multiplyScalar(SETTINGS.predatorWeight));
       }
 
-      const toCenter = schoolCenter.clone().sub(boid.position);
+      if (schoolAwayFromPredator.lengthSq() > 0.0001) {
+        acceleration.add(
+          steerTowards(schoolAwayFromPredator, boid.velocity).multiplyScalar(
+            SETTINGS.schoolEscapeWeight * predator.intensity,
+          ),
+        );
+      }
+
+      const toCenter = baitCenter.clone().sub(boid.position);
       acceleration.add(steerTowards(toCenter, boid.velocity).multiplyScalar(SETTINGS.panicCohesionWeight * predator.intensity));
 
-      const radial = boid.position.clone().sub(schoolCenter);
+      const radial = boid.position.clone().sub(baitCenter);
+      radial.z *= 0.28;
       if (radial.lengthSq() > 0.0001) {
         const tangent = new THREE.Vector3(-radial.y, radial.x, 0).normalize();
-        acceleration.add(steerTowards(tangent, boid.velocity).multiplyScalar(SETTINGS.millingWeight * predator.intensity));
+        const millingPressure = THREE.MathUtils.clamp(predator.intensity * (0.35 + pressure), 0, 1);
+        acceleration.add(steerTowards(tangent, boid.velocity).multiplyScalar(SETTINGS.millingWeight * millingPressure));
       }
     }
 
@@ -350,6 +385,7 @@ function createPredatorState(): PredatorState {
     active: false,
     intensity: 0,
     lastMoveAt: 0,
+    pressureCenter: initial.clone(),
   };
 }
 
