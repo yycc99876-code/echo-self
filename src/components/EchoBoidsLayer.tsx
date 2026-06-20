@@ -10,6 +10,14 @@ type Boid = {
   color: THREE.Color;
 };
 
+type PredatorState = {
+  position: THREE.Vector3;
+  target: THREE.Vector3;
+  active: boolean;
+  intensity: number;
+  lastMoveAt: number;
+};
+
 const SETTINGS = {
   minSpeed: 0.18,
   maxSpeed: 0.48,
@@ -22,6 +30,11 @@ const SETTINGS = {
   separateWeight: 1.4,
   boundaryWeight: 1.35,
   boundaryMargin: 2.6,
+  predatorRadius: 5.4,
+  predatorWeight: 2.9,
+  panicCohesionWeight: 0.72,
+  millingWeight: 0.95,
+  idleCenterWeight: 0.1,
 };
 
 const FORWARD = new THREE.Vector3(0, 0, 1);
@@ -103,6 +116,26 @@ export function EchoBoidsLayer() {
     const trails = new THREE.Points(trailGeometry, trailMaterial);
     scene.add(trails);
 
+    const predator = createPredatorState();
+    const predatorVisual = createPredatorVisual();
+    scene.add(predatorVisual);
+    const raycaster = new THREE.Raycaster();
+    const mouseNdc = new THREE.Vector2();
+    const interactionPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+
+    function handlePointerMove(event: PointerEvent) {
+      const rect = host.getBoundingClientRect();
+      mouseNdc.x = ((event.clientX - rect.left) / Math.max(rect.width, 1)) * 2 - 1;
+      mouseNdc.y = -(((event.clientY - rect.top) / Math.max(rect.height, 1)) * 2 - 1);
+      raycaster.setFromCamera(mouseNdc, camera);
+      raycaster.ray.intersectPlane(interactionPlane, predator.target);
+      predator.active = true;
+      predator.intensity = 1;
+      predator.lastMoveAt = performance.now();
+    }
+
+    window.addEventListener("pointermove", handlePointerMove, { passive: true });
+
     const dummy = new THREE.Object3D();
     const clock = new THREE.Clock();
     let frame = 0;
@@ -125,7 +158,19 @@ export function EchoBoidsLayer() {
 
     function animate() {
       const dt = Math.min(clock.getDelta(), 1 / 24);
-      updateBoids(boids, bounds, dt);
+      const now = performance.now();
+      const inactiveFor = now - predator.lastMoveAt;
+      if (inactiveFor > 120) {
+        predator.intensity = Math.max(0, predator.intensity - dt * 0.9);
+      }
+      predator.active = predator.intensity > 0.02;
+      predator.position.lerp(predator.target, 1 - Math.pow(0.001, dt));
+      predatorVisual.position.copy(predator.position);
+      predatorVisual.visible = predator.active;
+      predatorVisual.scale.setScalar(0.75 + predator.intensity * 0.55);
+      (predatorVisual.material as THREE.SpriteMaterial).opacity = 0.12 + predator.intensity * 0.2;
+
+      updateBoids(boids, bounds, dt, predator);
       const slowDrift = performance.now() * 0.00006;
 
       for (let i = 0; i < boids.length; i += 1) {
@@ -167,11 +212,14 @@ export function EchoBoidsLayer() {
     return () => {
       cancelAnimationFrame(frame);
       observer.disconnect();
+      window.removeEventListener("pointermove", handlePointerMove);
       geometry.dispose();
       material.dispose();
       trailGeometry.dispose();
       trailMaterial.dispose();
       fishTexture.dispose();
+      (predatorVisual.material as THREE.SpriteMaterial).map?.dispose();
+      (predatorVisual.material as THREE.SpriteMaterial).dispose();
       sprites.forEach((sprite) => {
         (sprite.material as THREE.SpriteMaterial).dispose();
       });
@@ -212,9 +260,12 @@ function createBoids(count: number, bounds: THREE.Vector3) {
   return boids;
 }
 
-function updateBoids(boids: Boid[], bounds: THREE.Vector3, dt: number) {
+function updateBoids(boids: Boid[], bounds: THREE.Vector3, dt: number, predator: PredatorState) {
   const nextVelocities: THREE.Vector3[] = [];
   const nextPositions: THREE.Vector3[] = [];
+  const schoolCenter = new THREE.Vector3();
+  boids.forEach((boid) => schoolCenter.add(boid.position));
+  schoolCenter.multiplyScalar(1 / Math.max(boids.length, 1));
 
   for (let i = 0; i < boids.length; i += 1) {
     const boid = boids[i];
@@ -249,6 +300,28 @@ function updateBoids(boids: Boid[], bounds: THREE.Vector3, dt: number) {
       acceleration.add(steerTowards(avoidance, boid.velocity).multiplyScalar(SETTINGS.separateWeight));
     }
 
+    acceleration.add(steerTowards(schoolCenter.clone().sub(boid.position), boid.velocity).multiplyScalar(SETTINGS.idleCenterWeight));
+
+    if (predator.active) {
+      const predatorOffset = boid.position.clone().sub(predator.position);
+      const distance = Math.max(predatorOffset.length(), 0.001);
+      const pressure = Math.max(0, 1 - distance / SETTINGS.predatorRadius) * predator.intensity;
+
+      if (pressure > 0) {
+        const flee = predatorOffset.normalize().multiplyScalar(pressure);
+        acceleration.add(steerTowards(flee, boid.velocity).multiplyScalar(SETTINGS.predatorWeight));
+      }
+
+      const toCenter = schoolCenter.clone().sub(boid.position);
+      acceleration.add(steerTowards(toCenter, boid.velocity).multiplyScalar(SETTINGS.panicCohesionWeight * predator.intensity));
+
+      const radial = boid.position.clone().sub(schoolCenter);
+      if (radial.lengthSq() > 0.0001) {
+        const tangent = new THREE.Vector3(-radial.y, radial.x, 0).normalize();
+        acceleration.add(steerTowards(tangent, boid.velocity).multiplyScalar(SETTINGS.millingWeight * predator.intensity));
+      }
+    }
+
     const boundary = boundarySteer(boid.position, bounds, SETTINGS.boundaryMargin);
     if (boundary.lengthSq() > 0) {
       acceleration.add(steerTowards(boundary, boid.velocity).multiplyScalar(SETTINGS.boundaryWeight));
@@ -267,6 +340,33 @@ function updateBoids(boids: Boid[], bounds: THREE.Vector3, dt: number) {
     boids[i].velocity.copy(nextVelocities[i]);
     boids[i].position.copy(nextPositions[i]);
   }
+}
+
+function createPredatorState(): PredatorState {
+  const initial = new THREE.Vector3(99, 99, 0);
+  return {
+    position: initial.clone(),
+    target: initial.clone(),
+    active: false,
+    intensity: 0,
+    lastMoveAt: 0,
+  };
+}
+
+function createPredatorVisual() {
+  const texture = createPredatorTexture();
+  const material = new THREE.SpriteMaterial({
+    map: texture,
+    color: new THREE.Color("#f08c8c"),
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  const sprite = new THREE.Sprite(material);
+  sprite.visible = false;
+  sprite.scale.set(1, 1, 1);
+  return sprite;
 }
 
 function steerTowards(vector: THREE.Vector3, velocity: THREE.Vector3) {
@@ -339,6 +439,26 @@ function createFishTexture() {
   context.beginPath();
   context.arc(70, 18, 2.2, 0, Math.PI * 2);
   context.fill();
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+function createPredatorTexture() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 96;
+  canvas.height = 96;
+  const context = canvas.getContext("2d");
+  if (!context) return new THREE.CanvasTexture(canvas);
+
+  const gradient = context.createRadialGradient(48, 48, 0, 48, 48, 42);
+  gradient.addColorStop(0, "rgba(240,140,140,0.85)");
+  gradient.addColorStop(0.22, "rgba(240,140,140,0.28)");
+  gradient.addColorStop(1, "rgba(240,140,140,0)");
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, 96, 96);
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
