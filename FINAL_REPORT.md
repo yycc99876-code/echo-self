@@ -130,3 +130,14 @@ npm run start
 - Relationship uncertainty now gets a grounded boundary exercise and no invented astrology, collaborator labels, or relationship facts.
 - The LLM layer now rejects responses that invent unsupported astrology or relationship labels.
 - Echo prompt now explicitly forbids emoji, unsupported zodiac/house/five-elements claims, invented relationships, and forced Life Chart references.
+
+## Immersive Echo Awakening Phase
+
+- Replaced the `/echo` dashboard layout with a full-screen Echo Core experience.
+- Removed the visible three-column chat/workbench structure from the main Echo route.
+- Added a central particle-based Echo Core, lightweight menu button, bottom composer, guided progress bar, and product guide modal.
+- Added server-backed conversational onboarding for name, gender, birth date, birth time, birth place, current question, and companion style.
+- `POST /api/echo` now routes users without a Life Chart into onboarding and automatically generates the Life Chart when all fields are collected.
+- `GET /api/memory-state` now includes onboarding state so progress survives refresh.
+- The onboarding progress bar is real data, not a visual-only mock.
+- After onboarding completion, Echo exposes three primary entrances: 今日回声, 夜间校准, and 随便聊聊.

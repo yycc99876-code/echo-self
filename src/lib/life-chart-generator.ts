@@ -2,6 +2,7 @@ export interface LifeChartInput {
   name: string;
   birthDate: string;
   birthTime?: string;
+  birthPlace?: string;
   currentQuestion: string;
   currentEmotion: string;
   companionStyle: string;
@@ -59,6 +60,7 @@ function userMessage(input: LifeChartInput) {
     `名字：${input.name}`,
     `出生日期：${input.birthDate}`,
     input.birthTime ? `出生时间：${input.birthTime}` : "出生时间：未提供",
+    input.birthPlace ? `出生地点：${input.birthPlace}` : "出生地点：未提供",
     `当前最想问的问题：${input.currentQuestion}`,
     `最近最强烈的情绪：${input.currentEmotion}`,
     `希望 Echo 如何陪伴：${input.companionStyle}`,
@@ -102,6 +104,7 @@ export function fallbackGenerateLifeChart(input: LifeChartInput) {
 - 名字：${input.name}
 - 出生日期：${input.birthDate}
 ${input.birthTime ? `- 出生时间：${input.birthTime}` : "- 出生时间：未提供"}
+${input.birthPlace ? `- 出生地点：${input.birthPlace}` : "- 出生地点：未提供"}
 - 生成时间：${createdAt}
 
 ## 当前命题

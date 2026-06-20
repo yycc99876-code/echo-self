@@ -1,5 +1,5 @@
 import type { LifeChartInput } from "./life-chart-generator";
-import type { MemoryState, RelationshipItem } from "./server-memory-store";
+import type { MemoryState, OnboardingState, RelationshipItem } from "./server-memory-store";
 import type { ConversationType } from "./conversation-context";
 
 export type EchoResponse = {
@@ -7,6 +7,7 @@ export type EchoResponse = {
   assistantMessageId: string;
   conversationType: ConversationType;
   memoryUpdateStatus: "queued" | "skipped" | "completed";
+  onboardingState?: OnboardingState;
 };
 
 async function parse<T>(response: Response): Promise<T> {

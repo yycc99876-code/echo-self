@@ -1,15 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   getActiveMemory,
+  getOnboardingState,
   getLifeChart,
   getMemoryState,
   getRecentMessages,
   getRelationshipItems,
   getWikiPages,
+  saveLifeChart,
   saveMessage,
+  saveOnboardingState,
   type InputType,
 } from "@/lib/server-memory-store";
 import { generateEchoReply } from "@/lib/echo-llm";
+import { generateLifeChart, summarizeLifeChart } from "@/lib/life-chart-generator";
+import { addWikiEdit, upsertWikiPage } from "@/lib/server-memory-store";
+import { applyOnboardingInput, onboardingToLifeChartInput } from "@/lib/onboarding-flow";
 import {
   buildContextPack,
   classifyConversation,
@@ -28,10 +34,64 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "message is required", reply: "" }, { status: 400 });
     }
 
+    const lifeChart = getLifeChart();
+
+    if (!lifeChart) {
+      const conversationType: ConversationType = "onboarding";
+      const userMessage = saveMessage({ role: "user", content: message, inputType, conversationType });
+      const result = applyOnboardingInput(getOnboardingState(), message);
+      let onboarding = saveOnboardingState(result.state);
+      let reply = result.reply;
+
+      if (result.ready) {
+        const readyState = saveOnboardingState({ ...result.state, status: "completed" });
+        onboarding = readyState;
+        const input = onboardingToLifeChartInput(readyState);
+        const contentMd = await generateLifeChart(input);
+        const savedChart = saveLifeChart({
+          userName: input.name,
+          birthDate: input.birthDate,
+          birthTime: input.birthTime,
+          birthPlace: input.birthPlace,
+          currentQuestion: input.currentQuestion,
+          currentEmotion: input.currentEmotion,
+          companionStyle: input.companionStyle,
+          contentMd,
+          summaryMd: summarizeLifeChart(contentMd, input),
+        });
+
+        upsertWikiPage({
+          slug: "user/life-chart-interpretations",
+          title: "Life Chart Interpretations",
+          contentMd: `# Life Chart Interpretations\n\n- [${new Date().toISOString().slice(0, 10)}] 通过 Echo 对话式唤醒建立初始档案：${input.currentQuestion}`,
+          tags: ["life-chart", "onboarding"],
+          sourceMessageIds: [userMessage.id],
+          sourceQuotes: [message],
+        });
+        addWikiEdit({ pageSlug: "user/life-chart-interpretations", editSummary: "通过对话式唤醒保存初始 Life Chart" });
+
+        reply = `档案已经成形，${savedChart.userName}。\n\n我现在有了第一层地图：你的出生信息、当前问题，以及你希望我怎样陪你校准。\n\n接下来不用急着分析。你可以从三个入口开始：今日回声、夜间校准，或者随便聊聊。`;
+      }
+
+      const assistantMessage = saveMessage({
+        role: "assistant",
+        content: reply,
+        inputType: "text",
+        conversationType,
+      });
+
+      return NextResponse.json({
+        reply,
+        assistantMessageId: assistantMessage.id,
+        conversationType,
+        onboardingState: onboarding,
+        memoryUpdateStatus: result.ready ? "completed" : "skipped",
+      });
+    }
+
     const conversationType: ConversationType = classifyConversation(message);
     const userMessage = saveMessage({ role: "user", content: message, inputType, conversationType });
 
-    const lifeChart = getLifeChart();
     const activeMemory = getActiveMemory();
     const wikiPages = getWikiPages();
     const recentMessages = getRecentMessages(10);

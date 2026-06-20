@@ -1,6 +1,7 @@
 import type { ActiveMemory, LifeChart, Message, RelationshipItem, WikiPage } from "./server-memory-store";
 
 export type ConversationType =
+  | "onboarding"
   | "casual"
   | "meta"
   | "frustration"
@@ -145,6 +146,7 @@ function summarizeRelationships(items: RelationshipItem[]) {
 
 function relevantPages(pages: WikiPage[], type: ConversationType) {
   const priorityByType: Record<ConversationType, string[]> = {
+    onboarding: ["rules/future-response-rules", "user/preferences"],
     casual: ["rules/future-response-rules", "user/preferences"],
     meta: ["rules/future-response-rules", "user/preferences"],
     frustration: ["rules/future-response-rules", "user/preferences"],

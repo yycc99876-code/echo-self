@@ -18,6 +18,7 @@ export type LifeChart = {
   userName: string;
   birthDate: string;
   birthTime?: string;
+  birthPlace?: string;
   currentQuestion: string;
   currentEmotion: string;
   companionStyle: string;
@@ -87,8 +88,21 @@ export type RelationshipItem = {
   updatedAt: string;
 };
 
+export type OnboardingField = "name" | "gender" | "birthDate" | "birthTime" | "birthPlace" | "currentQuestion" | "companionStyle";
+
+export type OnboardingState = {
+  status: "not_started" | "collecting" | "ready" | "completed";
+  fields: Partial<Record<OnboardingField, string>>;
+  currentField: OnboardingField;
+  completedFields: OnboardingField[];
+  missingFields: OnboardingField[];
+  progress: number;
+  updatedAt: string;
+};
+
 export type MemoryState = {
   lifeChart: LifeChart | null;
+  onboarding: OnboardingState | null;
   activeMemory: ActiveMemory | null;
   wikiPages: WikiPage[];
   wikiEdits: WikiEdit[];
@@ -108,6 +122,7 @@ const KEYS = {
   activeMemory: "active_memory",
   wikiEdits: "wiki_edits",
   relationshipItems: "relationship_items",
+  onboarding: "onboarding",
 } as const;
 
 function ensureDataDir() {
@@ -174,6 +189,16 @@ export function saveLifeChart(chart: Omit<LifeChart, "id" | "createdAt" | "updat
     updatedAt: now(),
   };
   writeJSON(KEYS.lifeChart, saved);
+  return saved;
+}
+
+export function getOnboardingState() {
+  return readJSON<OnboardingState | null>(KEYS.onboarding, null);
+}
+
+export function saveOnboardingState(state: Omit<OnboardingState, "updatedAt">) {
+  const saved: OnboardingState = { ...state, updatedAt: now() };
+  writeJSON(KEYS.onboarding, saved);
   return saved;
 }
 
@@ -278,6 +303,7 @@ export function getMemoryState(): MemoryState {
   const wikiPages = getWikiPages().sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
   return {
     lifeChart: getLifeChart(),
+    onboarding: getOnboardingState(),
     activeMemory: getActiveMemory(),
     wikiPages,
     wikiEdits: getWikiEdits().sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)),
@@ -333,4 +359,5 @@ export function resetAllMemory() {
   writeJSON(KEYS.activeMemory, null);
   writeJSON(KEYS.wikiEdits, []);
   writeJSON(KEYS.relationshipItems, []);
+  writeJSON(KEYS.onboarding, null);
 }
