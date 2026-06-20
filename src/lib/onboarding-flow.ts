@@ -35,7 +35,7 @@ function cleanAnswer(field: OnboardingField, raw: string) {
 }
 
 function isNonAnswer(raw: string) {
-  return /^(你好|hi|hello|在吗|哈+|哈哈哈|随便聊聊)$/i.test(raw.trim());
+  return /^(你好|hi|hello|在吗|嗯|哈哈哈|随便聊聊)$/i.test(raw.trim());
 }
 
 function nextMissing(fields: Partial<Record<OnboardingField, string>>) {
@@ -64,10 +64,10 @@ export function nextOnboardingPrompt(state: OnboardingState | Omit<OnboardingSta
   const name = state.fields.name;
 
   const prompts: Record<OnboardingField, string> = {
-    name: "我还不认识你。先告诉我一个名字，我会用它建立你的第一份 Echo 档案。",
-    gender: `好，${name ?? "我先记住你"}。接下来告诉我你的性别，或者你希望我怎样称呼你的身份。`,
-    birthDate: "收到。出生日期直接说就行，比如 2004年8月24日。",
-    birthTime: "时间记得吗？不需要很精确。上午、下午、晚上，或者不确定，都可以。",
+    name: "我还不认识你。先给我一个名字就好，我会用它建立你的第一份 Echo 档案。",
+    gender: `好，${name ?? "我先记住你"}。接下来告诉我你的性别，或者你希望我如何理解你的身份。`,
+    birthDate: "收到。出生日期直接说就行，比如 2004 年 8 月 24 日。",
+    birthTime: "出生时间记得吗？不需要很精确。上午、下午、晚上，或者不确定，都可以。",
     birthPlace: "最后一个基础信息：你在哪个城市出生？只说城市就够了。",
     currentQuestion: "档案的骨架已经有了。现在告诉我，你最近最想反复问自己的一个问题是什么？",
     companionStyle: "最后，告诉我你希望 Echo 怎么陪你。比如：具体一点、少玄学、像产品经理一样拆解。",

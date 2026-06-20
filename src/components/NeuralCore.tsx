@@ -3,13 +3,10 @@
 import { useEffect, useRef } from "react";
 
 interface Particle {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
+  distance: number;
+  currentDistance: number;
   baseAngle: number;
-  baseDistance: number;
-  speed: number;
+  angle: number;
   size: number;
   color: string;
 }
@@ -18,130 +15,159 @@ export function NeuralCore({ mode, hasLifeChart }: { mode: string; hasLifeChart:
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number>(0);
   const particlesRef = useRef<Particle[]>([]);
-  const mouseRef = useRef({ x: -1000, y: -1000, isActive: false });
+  const mouseRef = useRef({ x: -1000, y: -1000, isActive: false, isClicking: false });
 
-  // Init particles
+  // Init Crisp Star Spiral
   useEffect(() => {
-    const colors = [
-      "rgba(236, 239, 242, 0.8)", // Primary text/white
-      "rgba(175, 199, 232, 0.6)", // Accent blue
-      "rgba(142, 214, 163, 0.5)", // Success mint
-    ];
+    const particles: Particle[] = [];
+    const totalParticles = 4000; // Optimal density for crisp stars
+    const numArms = 5; 
+    const maxRadius = 800; // Big enough to fill the screen
+    const twistFactor = 0.012; // Elegant curvature
 
-    particlesRef.current = Array.from({ length: 220 }, (_, i) => {
-      const baseAngle = Math.random() * Math.PI * 2;
-      const baseDistance = Math.random() * 140 + 20; // Radius spread
-      return {
-        x: 0,
-        y: 0,
-        vx: 0,
-        vy: 0,
-        baseAngle,
-        baseDistance,
-        speed: (Math.random() * 0.005 + 0.001) * (Math.random() > 0.5 ? 1 : -1),
-        size: Math.random() * 1.5 + 0.5,
-        color: colors[i % colors.length],
-      };
-    });
+    for (let i = 0; i < totalParticles; i++) {
+      // Dense center, spreading outwards
+      const r = Math.pow(Math.random(), 2.2) * maxRadius;
+
+      // Select Arm
+      const arm = i % numArms;
+      const armAngle = arm * ((Math.PI * 2) / numArms);
+
+      // Tight, controlled scatter that slightly flares at the tips
+      const scatterSpread = 0.05 + (r / maxRadius) * 0.15;
+      const scatter = (Math.random() - 0.5) * scatterSpread;
+
+      // Final angle
+      const finalAngle = armAngle + r * twistFactor + scatter;
+
+      // Color mapping exactly matching the design
+      let color;
+      let alpha = Math.random() * 0.4 + 0.6; // 0.6 to 1.0 opacity
+      
+      if (r < 30) {
+        // Pure white hot core
+        color = `rgba(255, 255, 255, ${alpha})`;
+      } else if (r < 90) {
+        // Star Gold
+        color = `rgba(250, 219, 95, ${alpha})`;
+      } else if (r < 180) {
+        // Deep Gold
+        color = `rgba(229, 169, 58, ${alpha})`;
+      } else if (r < 300) {
+        // Cerulean
+        color = `rgba(109, 151, 168, ${alpha})`;
+      } else {
+        // Prussian Blue fading out
+        color = `rgba(29, 52, 91, ${alpha * 0.7})`;
+      }
+
+      particles.push({
+        distance: r,
+        currentDistance: r,
+        baseAngle: finalAngle,
+        angle: finalAngle,
+        // Sharp, tiny dots like real stars
+        size: r < 40 ? Math.random() * 2 + 1 : Math.random() * 1.5 + 0.5,
+        color,
+      });
+    }
+
+    particlesRef.current = particles;
   }, []);
 
-  // Main render loop
+  // Main Render Loop
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d", { alpha: true });
     if (!ctx) return;
 
-    // Handle resize
     let width = canvas.offsetWidth;
     let height = canvas.offsetHeight;
+    let centerX = width / 2;
+    let centerY = height / 2;
     
-    // Support high DPI displays
     const dpr = window.devicePixelRatio || 1;
     const resize = () => {
       width = canvas.offsetWidth;
       height = canvas.offsetHeight;
+      centerX = width / 2;
+      centerY = height / 2;
       canvas.width = width * dpr;
       canvas.height = height * dpr;
-      ctx.scale(dpr, dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
     resize();
     window.addEventListener("resize", resize);
 
+    let globalRotation = 0;
+
     const render = () => {
-      // Clear with slight trail effect (alpha < 1)
-      ctx.clearRect(0, 0, width, height);
+      let speedMult = (mode === "thinking" || mode === "calibrating") ? 4 : 1;
       
-      const centerX = width / 2;
-      const centerY = height / 2;
+      // Majestic rotation
+      globalRotation -= 0.001 * speedMult;
+
+      ctx.clearRect(0, 0, width, height);
+
+      // Draw a very soft, pure radial glow for the core ONLY, behind the particles
+      const coreGlow = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, 100);
+      coreGlow.addColorStop(0, "rgba(255, 255, 255, 0.4)");
+      coreGlow.addColorStop(0.3, "rgba(250, 219, 95, 0.2)");
+      coreGlow.addColorStop(1, "rgba(0, 0, 0, 0)");
+      ctx.fillStyle = coreGlow;
+      ctx.fillRect(centerX - 100, centerY - 100, 200, 200);
+
+      const particles = particlesRef.current;
       const mouse = mouseRef.current;
 
-      // Draw connections (Neural web)
-      ctx.beginPath();
-      ctx.lineWidth = 0.4;
-      ctx.strokeStyle = "rgba(175, 199, 232, 0.08)";
-      
-      const particles = particlesRef.current;
-      
       for (let i = 0; i < particles.length; i++) {
         const p = particles[i];
 
-        // 1. Update Base Orbital Position
-        // If mode is thinking/calibrating, spin faster
-        const speedMultiplier = (mode === "thinking" || mode === "calibrating") ? 3 : 1;
-        p.baseAngle += p.speed * speedMultiplier;
-        
-        const targetX = centerX + Math.cos(p.baseAngle) * p.baseDistance;
-        const targetY = centerY + Math.sin(p.baseAngle) * p.baseDistance;
+        // Interaction
+        let targetDistance = p.distance;
+        let targetAngleOffset = 0;
 
-        // 2. Spring Force towards target
-        const dx = targetX - p.x;
-        const dy = targetY - p.y;
-        p.vx += dx * 0.015; // Spring constant
-        p.vy += dy * 0.015;
-
-        // 3. Mouse Repulsion
-        if (mouse.isActive) {
-          const mdx = mouse.x - p.x;
-          const mdy = mouse.y - p.y;
-          const mDist = Math.sqrt(mdx * mdx + mdy * mdy);
-          if (mDist < 120) {
-            const force = (120 - mDist) / 120;
-            p.vx -= (mdx / mDist) * force * 0.8;
-            p.vy -= (mdy / mDist) * force * 0.8;
+        if (mouse.isClicking) {
+          // Implosion
+          targetDistance = p.distance * 0.2;
+          targetAngleOffset = p.distance * 0.05; 
+        } else if (mouse.isActive) {
+          // Hover repulse
+          const idealX = centerX + Math.cos(p.baseAngle + globalRotation) * p.distance;
+          const idealY = centerY + Math.sin(p.baseAngle + globalRotation) * p.distance;
+          const distToMouse = Math.sqrt((idealX - mouse.x) ** 2 + (idealY - mouse.y) ** 2);
+          
+          if (distToMouse < 150) {
+            const repulsion = (150 - distToMouse) / 150;
+            targetDistance = p.distance + repulsion * 100;
           }
         }
 
-        // 4. Apply velocity and friction
-        p.vx *= 0.88; // Friction
-        p.vy *= 0.88;
-        
-        // Safety bounds to prevent extreme explosion
-        if (p.vx > 20) p.vx = 20;
-        if (p.vx < -20) p.vx = -20;
-        if (p.vy > 20) p.vy = 20;
-        if (p.vy < -20) p.vy = -20;
+        p.currentDistance += (targetDistance - p.currentDistance) * 0.1;
 
-        p.x += p.vx;
-        p.y += p.vy;
+        const currentAngle = p.baseAngle + globalRotation + targetAngleOffset;
+        const x = centerX + Math.cos(currentAngle) * p.currentDistance;
+        const y = centerY + Math.sin(currentAngle) * p.currentDistance;
 
-        // Draw Particle
+        // Draw crisp star
         ctx.fillStyle = p.color;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Draw connections to nearby particles
-        for (let j = i + 1; j < particles.length; j++) {
-          const p2 = particles[j];
-          const dist = Math.sqrt((p.x - p2.x) ** 2 + (p.y - p2.y) ** 2);
-          if (dist < 35) {
-            ctx.moveTo(p.x, p.y);
-            ctx.lineTo(p2.x, p2.y);
-          }
+        
+        // Only inner particles glow to avoid washing out the whole image
+        if (p.distance < 40) {
+          ctx.shadowBlur = 8;
+          ctx.shadowColor = "#FFFFFF";
+        } else if (p.distance < 100) {
+          ctx.shadowBlur = 4;
+          ctx.shadowColor = "#FADB5F";
+        } else {
+          ctx.shadowBlur = 0;
         }
+
+        ctx.beginPath();
+        ctx.arc(x, y, p.size, 0, Math.PI * 2);
+        ctx.fill();
       }
-      ctx.stroke();
 
       animationRef.current = requestAnimationFrame(render);
     };
@@ -158,57 +184,22 @@ export function NeuralCore({ mode, hasLifeChart }: { mode: string; hasLifeChart:
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    mouseRef.current = {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-      isActive: true,
-    };
+    mouseRef.current.x = e.clientX - rect.left;
+    mouseRef.current.y = e.clientY - rect.top;
+    mouseRef.current.isActive = true;
   };
 
   const handleMouseLeave = () => {
     mouseRef.current.isActive = false;
+    mouseRef.current.isClicking = false;
   };
 
-  const handleClick = (e: React.MouseEvent) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
-    
-    const centerX = canvas.offsetWidth / 2;
-    const centerY = canvas.offsetHeight / 2;
-    const distCenter = Math.sqrt((mx - centerX) ** 2 + (my - centerY) ** 2);
+  const handleMouseDown = () => {
+    mouseRef.current.isClicking = true;
+  };
 
-    const particles = particlesRef.current;
-
-    // 交互逻辑：点击核心区 -> 神经内爆；点击边缘区 -> 涟漪炸弹
-    if (distCenter < 60) {
-      // 神经内爆 (Implosion)
-      particles.forEach((p) => {
-        const dx = centerX - p.x;
-        const dy = centerY - p.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist > 0) {
-          // 产生一个向中心的巨大拉力
-          p.vx += (dx / dist) * (Math.random() * 25 + 15);
-          p.vy += (dy / dist) * (Math.random() * 25 + 15);
-        }
-      });
-    } else {
-      // 涟漪排斥 (Explosion Ripple)
-      particles.forEach((p) => {
-        const dx = p.x - mx;
-        const dy = p.y - my;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < 180 && dist > 0) {
-          const force = (180 - dist) / 180;
-          // 产生一个向外推开的爆发力
-          p.vx += (dx / dist) * force * 40;
-          p.vy += (dy / dist) * force * 40;
-        }
-      });
-    }
+  const handleMouseUp = () => {
+    mouseRef.current.isClicking = false;
   };
 
   return (
@@ -216,9 +207,10 @@ export function NeuralCore({ mode, hasLifeChart }: { mode: string; hasLifeChart:
       ref={canvasRef}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
-      onClick={handleClick}
-      className={`absolute inset-0 z-10 w-full h-full cursor-crosshair transition-opacity duration-1000 ${
-        hasLifeChart ? "opacity-100" : "opacity-80"
+      onMouseDown={handleMouseDown}
+      onMouseUp={handleMouseUp}
+      className={`absolute inset-0 w-full h-full cursor-crosshair transition-opacity duration-1000 ${
+        hasLifeChart ? "opacity-100" : "opacity-90"
       }`}
       style={{ touchAction: "none" }}
     />

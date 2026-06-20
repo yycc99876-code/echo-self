@@ -1,15 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties } from "react";
 import { fetchMemoryState, sendEchoMessage } from "@/lib/api-client";
 import type { MemoryState, Message, OnboardingField } from "@/lib/server-memory-store";
 import { ONBOARDING_FIELDS, ONBOARDING_LABELS } from "@/lib/onboarding-flow";
 import { isSpeechRecognitionSupported, startSpeechRecognition } from "@/lib/speech-recognition";
 import { speakText } from "@/lib/tts";
-import { motion, AnimatePresence } from "framer-motion";
-import { Mic, Send, X, Menu } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Menu, Mic, Send, X } from "lucide-react";
 import { NeuralCore } from "./NeuralCore";
+import StarryCanvas from "./StarryCanvas";
 
 type EchoMode = "standby" | "listening" | "thinking" | "speaking" | "calibrating";
 
@@ -45,13 +45,14 @@ export function ImmersiveEcho() {
     };
   }, []);
 
-  const latestAssistant = useMemo(() => [...messages].reverse().find((message) => message.role === "assistant"), [messages]);
+  const latestAssistant = useMemo(
+    () => [...messages].reverse().find((message) => message.role === "assistant"),
+    [messages],
+  );
   const latestUser = useMemo(() => [...messages].reverse().find((message) => message.role === "user"), [messages]);
   const hasLifeChart = Boolean(memoryState?.lifeChart);
   const onboarding = memoryState?.onboarding;
-  const completedFields = new Set<OnboardingField>(
-    hasLifeChart ? ONBOARDING_FIELDS : onboarding?.completedFields ?? [],
-  );
+  const completedFields = new Set<OnboardingField>(hasLifeChart ? ONBOARDING_FIELDS : onboarding?.completedFields ?? []);
   const remaining = hasLifeChart ? 0 : Math.max(ONBOARDING_FIELDS.length - completedFields.size, 0);
   const progress = hasLifeChart ? 100 : onboarding?.progress ?? 0;
 
@@ -80,6 +81,7 @@ export function ImmersiveEcho() {
     if (!text || mode === "thinking" || mode === "calibrating") return;
 
     stopSpeechRef.current();
+    recognitionRef.current?.abort();
     setInput("");
     setNotice("");
     setMode(hasLifeChart ? "thinking" : "calibrating");
@@ -117,14 +119,14 @@ export function ImmersiveEcho() {
   }
 
   function startVoice() {
-    if (mode === "thinking" || mode === "calibrating") {
-      return;
-    }
+    if (mode === "thinking" || mode === "calibrating") return;
     stopSpeechRef.current();
+
     if (!isSpeechRecognitionSupported()) {
       setNotice("这个浏览器暂时听不见你，可以先打字。");
       return;
     }
+
     setMode("listening");
     setNotice("我在听，说完会自动送出。");
     recognitionRef.current = startSpeechRecognition({
@@ -137,7 +139,7 @@ export function ImmersiveEcho() {
         }
       },
       onEnd: () => {
-        if (mode === "listening") setMode("standby");
+        setMode((current) => (current === "listening" ? "standby" : current));
       },
       onError: (message) => {
         setMode("standby");
@@ -147,18 +149,11 @@ export function ImmersiveEcho() {
   }
 
   return (
-    <main className="echo-immersive fixed inset-0 z-40 overflow-hidden">
-      <svg className="hidden" style={{ position: "absolute", width: 0, height: 0 }}>
-        <filter id="starry-flow">
-          <feTurbulence type="fractalNoise" baseFrequency="0.003 0.005" numOctaves="3" result="noise">
-            <animate attributeName="baseFrequency" values="0.003 0.005; 0.005 0.007; 0.003 0.005" dur="40s" repeatCount="indefinite" />
-          </feTurbulence>
-          <feDisplacementMap in="SourceGraphic" in2="noise" scale="30" xChannelSelector="R" yChannelSelector="G" />
-        </filter>
-      </svg>
-      <div className="echo-starry-bg" aria-hidden />
+    <main className="echo-immersive fixed inset-0 z-40 overflow-hidden bg-black">
+      <StarryCanvas />
       <div className="echo-starry-overlay" aria-hidden />
-      <button type="button" className="echo-menu-button" onClick={() => setDrawerOpen(true)} aria-label="Open Echo menu">
+
+      <button type="button" className="echo-menu-button" onClick={() => setDrawerOpen(true)} aria-label="打开 Echo 菜单">
         <Menu size={20} className="text-[rgba(236,239,242,0.72)]" />
       </button>
 
@@ -202,23 +197,25 @@ export function ImmersiveEcho() {
           />
         )}
       </AnimatePresence>
-      <AnimatePresence>
-        {guideOpen && <GuideModal onClose={() => setGuideOpen(false)} />}
-      </AnimatePresence>
+      <AnimatePresence>{guideOpen && <GuideModal onClose={() => setGuideOpen(false)} />}</AnimatePresence>
     </main>
   );
 }
 
 function EchoCore({ mode, hasLifeChart }: { mode: EchoMode; hasLifeChart: boolean }) {
   return (
-    <motion.div 
+    <motion.div
       initial={{ scale: 0.9, opacity: 0, filter: "blur(10px)" }}
       animate={{ scale: 1, opacity: 1, filter: "blur(0px)" }}
       transition={{ type: "spring", bounce: 0.2, duration: 1.2 }}
-      className={`echo-core echo-core-${mode} ${hasLifeChart ? "echo-core-awake" : ""}`} aria-hidden
+      className={`echo-core echo-core-${mode} ${hasLifeChart ? "echo-core-awake" : ""}`}
+      aria-hidden
     >
-      <div className="echo-core-glow" />
-      <NeuralCore mode={mode} hasLifeChart={hasLifeChart} />
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div className="relative h-full w-full pointer-events-auto">
+          <NeuralCore mode={mode} hasLifeChart={hasLifeChart} />
+        </div>
+      </div>
     </motion.div>
   );
 }
@@ -267,7 +264,15 @@ function Composer({
 }) {
   return (
     <div className="echo-composer">
-      <motion.button whileHover={{ scale: 0.95 }} whileTap={{ scale: 0.9 }} type="button" className="echo-attach" aria-label="Voice input" onClick={onVoice} disabled={disabled}>
+      <motion.button
+        whileHover={{ scale: 0.95 }}
+        whileTap={{ scale: 0.9 }}
+        type="button"
+        className="echo-attach"
+        aria-label="语音输入"
+        onClick={onVoice}
+        disabled={disabled}
+      >
         <Mic size={18} strokeWidth={2} />
       </motion.button>
       <textarea
@@ -283,7 +288,15 @@ function Composer({
           }
         }}
       />
-      <motion.button whileHover={{ scale: 0.95 }} whileTap={{ scale: 0.9 }} type="button" className="echo-send" onClick={onSend} disabled={disabled || !value.trim()} aria-label="Send">
+      <motion.button
+        whileHover={{ scale: 0.95 }}
+        whileTap={{ scale: 0.9 }}
+        type="button"
+        className="echo-send"
+        onClick={onSend}
+        disabled={disabled || !value.trim()}
+        aria-label="发送"
+      >
         <Send size={18} strokeWidth={2} />
       </motion.button>
     </div>
@@ -292,11 +305,14 @@ function Composer({
 
 function EchoDrawer({ state, onClose, onGuide }: { state: MemoryState | null; onClose: () => void; onGuide: () => void }) {
   return (
-    <motion.aside 
-      initial={{ x: "-100%" }} animate={{ x: 0 }} exit={{ x: "-100%" }} transition={{ type: "spring", bounce: 0, duration: 0.4 }}
+    <motion.aside
+      initial={{ x: "-100%" }}
+      animate={{ x: 0 }}
+      exit={{ x: "-100%" }}
+      transition={{ type: "spring", bounce: 0, duration: 0.4 }}
       className="echo-drawer"
     >
-      <button type="button" className="echo-close" onClick={onClose}>
+      <button type="button" className="echo-close" onClick={onClose} aria-label="关闭菜单">
         <X size={28} />
       </button>
       <div className="font-label text-[11px] text-[var(--text-faint)]">ECHO MENU</div>
@@ -312,7 +328,11 @@ function EchoDrawer({ state, onClose, onGuide }: { state: MemoryState | null; on
       <div className="echo-drawer-card">
         <span className="font-label">当前状态</span>
         <strong>{state?.lifeChart ? "已唤醒" : "正在建档"}</strong>
-        <p>{state?.lifeChart ? "不用切换入口。继续在底部输入框里说话，Echo 会沿着你的档案更新理解。" : "继续回答底部问题，让 Echo 完成第一层校准。"}</p>
+        <p>
+          {state?.lifeChart
+            ? "不用切换入口。继续在底部输入框里说话，Echo 会沿着你的档案更新理解。"
+            : "继续回答底部问题，让 Echo 完成第一层校准。"}
+        </p>
       </div>
     </motion.aside>
   );
@@ -321,11 +341,14 @@ function EchoDrawer({ state, onClose, onGuide }: { state: MemoryState | null; on
 function GuideModal({ onClose }: { onClose: () => void }) {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="echo-guide-backdrop">
-      <motion.section 
-        initial={{ y: 20, opacity: 0, scale: 0.96 }} animate={{ y: 0, opacity: 1, scale: 1 }} exit={{ y: 20, opacity: 0, scale: 0.96 }} transition={{ type: "spring", bounce: 0 }}
+      <motion.section
+        initial={{ y: 20, opacity: 0, scale: 0.96 }}
+        animate={{ y: 0, opacity: 1, scale: 1 }}
+        exit={{ y: 20, opacity: 0, scale: 0.96 }}
+        transition={{ type: "spring", bounce: 0 }}
         className="echo-guide"
       >
-        <button type="button" className="echo-close" onClick={onClose}>
+        <button type="button" className="echo-close" onClick={onClose} aria-label="关闭说明">
           <X size={28} />
         </button>
         <div className="font-label text-[11px] text-[var(--text-faint)]">ECHO 使用说明</div>
@@ -353,7 +376,7 @@ function GuideModal({ onClose }: { onClose: () => void }) {
           <article>
             <span>日志</span>
             <strong>留下痕迹</strong>
-            <p>重要变化会沉淀为 Echo Log，让你看见它如何变懂你。</p>
+            <p>重要变化会沉淀进 Echo Log，让你看见它如何变懂你。</p>
           </article>
         </div>
         <button type="button" className="echo-guide-button" onClick={onClose}>
@@ -365,7 +388,10 @@ function GuideModal({ onClose }: { onClose: () => void }) {
 }
 
 function firstLine(text: string) {
-  return text.split("\n").map((line) => line.trim()).filter(Boolean)[0] ?? "";
+  return text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)[0] ?? "";
 }
 
 function restLines(text: string) {

@@ -2,29 +2,46 @@
 
 ## Completed
 
-Echo Self has been rebuilt into a presentable Life Chart Avatar MVP:
+Echo Self has been pushed closer to a coherent Life Chart Avatar MVP:
 
-- Rebuilt the product UI into a quiet private dossier style.
-- Completed `/`, `/echo`, `/life-chart`, `/memory`, and `/relationship`.
-- Removed fixed assistant reply arrays, fake voice input, fake Wiki content, localStorage core storage, and old debug-oriented panels.
-- Added service-side memory APIs and unified the main data flow around `.echo-data`.
-- Added real Web Speech API input and browser SpeechSynthesis output.
-- Added server Life Chart creation, Echo conversation, memory state, reset, and relationship APIs.
-- Added relationship map, memory archive, Life Chart dossier, right-side memory inspector, and command-style chat input.
+- The main product path is now a single Echo entry, not scattered manual entrances.
+- New users build Life Chart through conversation inside `/echo`; they are not forced to manually edit a form first.
+- Echo supports natural casual chat, frustration repair, action requests, relationship questions, product-direction talk, corrections, preferences, and life-direction questions.
+- The main reply path saves Recent Messages, builds a compact ContextPack, returns the reply, then queues long-term memory writing.
+- TTS playback can be interrupted by sending a new message or starting voice input.
+- Core prompt, classifier, onboarding, API route, and memory writer were cleaned from encoding corruption.
+- Visual runtime was verified after fixing a stale Next dev CSS cache issue.
+- `npm run build` passes.
 
 ## Product Positioning
 
-Echo Self is a clean-room Life Chart Avatar product. It is not an AI girlfriend, not a generic chatbot, and not a fortune-telling tool. It uses Life Chart language as an interpretive frame for self-understanding, long-term memory, relationship context, and concrete action.
+Echo Self is a clean-room Life Chart Avatar product. It is not an AI girlfriend, not a generic chatbot, and not a fortune-telling tool.
+
+The product promise is:
+
+> Echo talks with the user, gradually forms a Life Chart, remembers durable corrections and patterns, and becomes more aligned over time without turning ordinary chat into memory garbage.
+
+## Current User Flow
+
+1. User opens `/echo`.
+2. Echo asks for one piece of real information at a time.
+3. The progress bar advances as name, gender, birth date, birth time, birth place, current question, and companion style are collected.
+4. When onboarding is complete, `/api/echo` generates and saves Life Chart automatically.
+5. The user keeps talking in the same composer.
+6. Casual messages stay in Recent Messages.
+7. Durable information writes into Wiki pages and Active Memory asynchronously.
 
 ## Data Flow
 
-1. User creates a Life Chart at `/life-chart`.
-2. `POST /api/life-chart` generates and saves `contentMd` plus `summaryMd`.
-3. `/echo` sends messages to `POST /api/echo`.
-4. `/api/echo` saves recent messages, builds a lightweight ContextPack, generates the reply, saves the assistant message, and returns immediately.
-5. Long-term memory writing is queued after the reply.
-6. Frontend displays the reply first, starts TTS, then refreshes `/api/memory-state`.
-7. `/memory` and `/relationship` read the same server state.
+1. `POST /api/echo` receives `{ message, inputType }`.
+2. If no Life Chart exists, Echo routes into conversational onboarding.
+3. If Life Chart exists, Echo classifies the message.
+4. The server saves the user message.
+5. The server builds a compact ContextPack.
+6. Echo generates the reply.
+7. The server saves the assistant message and immediately returns JSON.
+8. Memory Writer runs in the background when the turn has long-term value.
+9. `GET /api/memory-state` exposes Life Chart, Active Memory, Wiki pages, recent messages, future rules, open threads, and relationships.
 
 ## API
 
@@ -35,7 +52,7 @@ Echo Self is a clean-room Life Chart Avatar product. It is not an AI girlfriend,
 - `POST /api/relationships`
 - `DELETE /api/relationships?id=...`
 
-`POST /api/echo` now returns:
+`POST /api/echo` returns:
 
 ```ts
 {
@@ -43,112 +60,86 @@ Echo Self is a clean-room Life Chart Avatar product. It is not an AI girlfriend,
   assistantMessageId: string
   conversationType: ConversationType
   memoryUpdateStatus: "queued" | "skipped" | "completed"
+  onboardingState?: OnboardingState
 }
 ```
 
-## Fallback
-
-If no model key is available, Echo uses rule-based generation from the user input and ContextPack. It is not random and does not cycle fixed fake replies. LLM responses are also checked for obvious encoding corruption and fall back to local generation when needed.
-
 ## Conversation Memory & Performance
 
-1. Echo supports casual chat. Casual messages like waking up, joking, or light check-ins receive short natural replies.
-2. Casual chat is saved to Recent Messages but is not written to long-term Wiki unless it contains preferences, corrections, goals, repeated emotions, important relationships, or future response requirements.
+1. Echo supports casual chat.
+2. Casual chat is saved to Recent Messages but does not write to long-term memory by default.
 3. Recent Messages loads the latest 8-10 messages for continuity.
-4. ContextPack contains Life Chart summary, Active Memory, Future Response Rules, recent messages, up to 3 relevant Wiki pages, Open Threads, and user preferences.
-5. Future Response Rules have highest priority over Active Memory, Life Chart, Wiki pages, and Recent Messages.
-6. Memory Writer is asynchronous. `/api/echo` does not wait for Wiki updates before returning the reply.
-7. Long-term memory is written for corrections, preferences, product direction changes, life direction questions, relationship questions, repeated emotions, explicit “remember this” requests, and stable goals.
-8. Long-term memory is skipped for ordinary greetings, jokes, one-off casual reactions, short acknowledgements, and messages with no durable value.
-9. Streaming is not implemented yet. The current optimized path returns a normal JSON response quickly and queues memory work.
-10. TTS does not block text display. Text renders first; TTS starts afterward and failure does not break the chat.
-11. Memory Panel shows Updating or skipped status, then refreshes `/api/memory-state`.
-12. Current response timing in production API tests was about 2s for casual and about 4-7s for model-backed serious replies, without waiting for Memory Writer.
-13. Known performance limit: model latency still dominates non-casual replies when using remote LLMs.
-14. Next performance steps: add `/api/echo/stream`, preset response cache keyed by Life Chart and memory timestamps, faster model routing for casual replies, and vector retrieval for larger Wiki archives.
+4. ContextPack includes Future Response Rules, Active Memory, Life Chart summary, recent messages, up to 3 relevant Wiki pages, open threads, user preferences, and relationship summary.
+5. Future Response Rules have highest priority.
+6. Memory Writer is asynchronous and does not block `/api/echo`.
+7. Long-term memory writes for corrections, stable preferences, product direction, life direction, relationship questions, repeated emotions, and explicit remember requests.
+8. Long-term memory skips greetings, jokes, one-off casual reactions, and empty acknowledgements.
+9. Streaming is not implemented yet.
+10. TTS does not block text display and can be interrupted.
+11. Memory Panel refreshes through `/api/memory-state`.
+12. Casual and repair turns are guarded local replies for speed and reliability.
+13. Model-backed serious replies still depend on remote model latency.
+14. Next upgrades: streaming, preset cache, faster model routing, vector retrieval, and provider TTS.
+
+## Fallback Mechanism
+
+Fallback is not a random fake-response array. It branches by conversation type and ContextPack:
+
+- Casual: short, warm, no forced Life Chart.
+- Frustration: stop, acknowledge, repair.
+- Meta: explain what Echo is doing.
+- Action request: concrete lightweight plan.
+- Relationship: boundary exercise without invented facts.
+- Correction/preference: short acknowledgement and future-rule framing.
+- Product direction: mechanism-first answer.
+- Emotion: first regulate, then optionally analyze.
+
+The LLM layer rejects obviously bad responses that repeat old templates, invent unsupported astrology, invent relationship labels, or contain encoding corruption.
 
 ## Validation
 
-Tested:
+Completed checks:
 
-- Life Chart creation with user `国梁`, date `2004-08-24`, question `我适合转向 AI 产品吗？`.
-- Casual chat: `哈哈哈我刚醒，脑子有点懵。` returned `conversationType: casual` and `memoryUpdateStatus: skipped`.
-- Preference correction wrote Future Response Rules.
-- Product direction correction wrote Future Response Rules and product direction memory.
-- Serious AI product question wrote long-term memory.
-- Relationship question wrote relationship memory and Open Threads.
 - `npm run build` passed.
-
-## How To Run
-
-```bash
-npm run dev
-```
-
-For production verification:
-
-```bash
-npm run build
-npm run start
-```
+- `/api/echo` casual test returned `conversationType: casual` and `memoryUpdateStatus: skipped`.
+- Preference correction returned `conversationType: preference` and queued memory writing.
+- Relationship question returned `conversationType: relationship` and queued memory writing.
+- Action request returned a concrete plan and skipped long-term memory.
+- Byte-level UTF-8 API check confirmed clean Chinese response.
+- Headless Chrome screenshot verified `/echo` after clearing stale Next dev cache.
 
 ## Known Issues
 
-- `/api/echo/stream` is not implemented yet.
-- `.echo-data` is file-based and suitable for local demo, not multi-user production.
-- SpeechRecognition support depends on the browser.
-- Remote LLM encoding issues are guarded by fallback, but provider configuration should still be verified before a formal demo.
+- Streaming is not implemented.
+- `.echo-data` is local file storage and not production multi-user storage.
+- Browser SpeechRecognition support depends on the user browser.
+- Browser SpeechSynthesis still sounds stiff; a real product demo should connect a dedicated TTS provider.
+- The current visual direction is being iterated by Antigravity, so this pass focused mainly on conversation logic and memory intelligence.
 
-## Avatar And Voice Extension Points
+## Voice Extension Point
 
-- Avatar: replace the `GL` monogram in `IdentityCard`.
-- Voice: replace `src/lib/tts.ts` with a custom TTS provider while keeping the same non-blocking playback contract.
-- Future voice cloning should store a `voiceId` preference, not block chat rendering, and fall back to browser TTS.
+Replace `src/lib/tts.ts` with a provider-backed audio flow while keeping the same contract:
 
-## Opening Voice & Product Tone
+1. Text appears first.
+2. Current audio stops when the user sends a new message.
+3. Audio playback starts after text render.
+4. TTS failure never blocks chat.
+5. Store future `voiceId`, speaking style, speed, and emotion intensity as preferences.
 
-- The home entry now starts from conversation instead of forcing the user to fill a form first.
-- Echo opening copy now invites the user to say a real current-state sentence, such as waking up confused, feeling stuck, or wanting to talk lightly.
-- The missing Life Chart state no longer feels like an error. It frames Echo as “still learning you” and lets the user continue talking.
-- Chat feedback is warmer: durable memories are described as “worth keeping” signals; casual turns stay in recent conversation without polluting the archive.
-- Preset prompts now include light, low-pressure starters, not only serious life-direction questions.
-- Echo's prompt now prioritizes natural, spoken, warm responses for casual chat and avoids forcing every turn into destiny analysis.
+Recommended next voice direction:
 
-## TTS Direction
+- Server route such as `POST /api/tts`.
+- Provider such as Bailian/CosyVoice or another Chinese natural voice service.
+- Return audio URL or stream.
+- Keep browser TTS only as fallback.
 
-- Current playback still uses browser SpeechSynthesis as a fallback, which is why the voice can sound stiff or “web-like”.
-- A real product demo should connect a server-side TTS provider, preferably a Chinese-optimized service such as CosyVoice / Bailian TTS, and return playable audio instead of relying on browser voices.
-- The current non-blocking contract should stay the same: text appears first, TTS starts afterward, and TTS failure never blocks chat.
-- The future voice layer should expose `voiceId`, speaking style, speed, and emotion intensity as user or agent preferences.
+## Next Product Step
 
-## Conversation Repair After Bad Dialogue Test
+The next important product leap is not another page. It is an evolution loop:
 
-- Added explicit routing for meta/frustration/action-request turns.
-- Casual, frustration, meta, action-request, and relationship turns now use deterministic guarded replies instead of allowing the remote model to over-analyze.
-- Echo now stops and repairs when users ask “什么意思”, “你在干什么”, or express anger.
-- Weekend/action prompts now receive concrete lightweight plans instead of Life Chart analysis.
-- Relationship uncertainty now gets a grounded boundary exercise and no invented astrology, collaborator labels, or relationship facts.
-- The LLM layer now rejects responses that invent unsupported astrology or relationship labels.
-- Echo prompt now explicitly forbids emoji, unsupported zodiac/house/five-elements claims, invented relationships, and forced Life Chart references.
-
-## Immersive Echo Awakening Phase
-
-- Replaced the `/echo` dashboard layout with a full-screen Echo Core experience.
-- Removed the visible three-column chat/workbench structure from the main Echo route.
-- Added a central particle-based Echo Core, lightweight menu button, bottom composer, guided progress bar, and product guide modal.
-- Added server-backed conversational onboarding for name, gender, birth date, birth time, birth place, current question, and companion style.
-- `POST /api/echo` now routes users without a Life Chart into onboarding and automatically generates the Life Chart when all fields are collected.
-- `GET /api/memory-state` now includes onboarding state so progress survives refresh.
-- The onboarding progress bar is real data, not a visual-only mock.
-- After onboarding completion, Echo exposes three primary entrances: 今日回声, 夜间校准, and 随便聊聊.
-
-## Long Conversation Intelligence Update
-
-- Latest interaction model is now single-path: after onboarding, the user continues through the bottom Echo composer only. The separate daily echo, calibration, and casual-chat mode buttons were removed from the main Echo surface.
-- Life Chart is treated as something Echo collects through dialogue. Ordinary users are no longer pushed toward a manual Life Chart editor from the home page, main sidebar, or Echo drawer.
-- Conversation classification was rebuilt with readable rules for casual, frustration, meta, action request, correction, preference, product direction, relationship, emotion, life direction, and life chart turns.
-- ContextPack now stays compact: Future Response Rules, Active Memory, Life Chart summary, latest 8 messages, up to 3 relevant Wiki pages, open threads, preferences, and relationship summary.
-- Memory Writer now writes only durable information: corrections, stable preferences, product direction, relationship questions, life direction questions, repeated emotions, and explicit remember requests. Ordinary chat remains in Recent Messages.
-- Long conversations now get session consolidation. Every 10 messages, meaningful turns can be summarized into `conversation/session-summaries` so Echo can keep continuity without stuffing the full history into each prompt.
-- Fallback replies were rebuilt to avoid fixed fake arrays and the repeated “slowly unpack this theme” template. Fallback now branches by conversation type and gives natural replies for casual, frustration, meta, action, and relationship turns.
-- Speech playback can be interrupted. Sending another message or starting voice input stops the current TTS instead of forcing the user to wait.
+- Morning: Echo generates a light daily prompt or prediction.
+- Day: user chats naturally.
+- Night: Echo asks a small calibration question.
+- Memory Writer updates rules, preferences, themes, and open threads.
+- Session summaries compress long conversations.
+- Echo becomes better because corrections and durable patterns actually change future replies.

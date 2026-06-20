@@ -122,7 +122,7 @@ function activeMemoryFor(type: ConversationType, userMessage: string, pack: Cont
   ].filter(Boolean);
 
   if (type === "product_direction") {
-    lines.push("当前重点：用户正在打磨 Echo Self 的长期对话、记忆质量、语音实时交互和越用越懂用户的智能体机制。");
+    lines.push("当前重点：用户正在打磨 Echo Self 的长对话、记忆质量、语音实时交互和越用越懂用户的智能体机制。");
   } else if (type === "relationship") {
     lines.push("当前重点：用户在处理关系线索。Echo 应给边界和小行动，不替用户做决定。");
   } else if (type === "correction" || type === "preference") {

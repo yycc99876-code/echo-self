@@ -1,20 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  addWikiEdit,
   getActiveMemory,
-  getOnboardingState,
   getLifeChart,
   getMemoryState,
+  getOnboardingState,
   getRecentMessages,
   getRelationshipItems,
   getWikiPages,
   saveLifeChart,
   saveMessage,
   saveOnboardingState,
+  upsertWikiPage,
   type InputType,
 } from "@/lib/server-memory-store";
 import { generateEchoReply } from "@/lib/echo-llm";
 import { generateLifeChart, summarizeLifeChart } from "@/lib/life-chart-generator";
-import { addWikiEdit, upsertWikiPage } from "@/lib/server-memory-store";
 import { applyOnboardingInput, onboardingToLifeChartInput } from "@/lib/onboarding-flow";
 import {
   buildContextPack,
@@ -68,7 +69,10 @@ export async function POST(request: NextRequest) {
           sourceMessageIds: [userMessage.id],
           sourceQuotes: [message],
         });
-        addWikiEdit({ pageSlug: "user/life-chart-interpretations", editSummary: "通过对话式唤醒保存初始 Life Chart" });
+        addWikiEdit({
+          pageSlug: "user/life-chart-interpretations",
+          editSummary: "通过对话式唤醒保存初始 Life Chart",
+        });
 
         reply = `档案已经成形，${savedChart.userName}。\n\n我现在有了第一层地图：你的出生信息、当前问题，以及你希望我怎样陪你校准。\n\n接下来不用选入口，也不用切页面。你只要继续说一句此刻最真实的状态，我会沿着这份档案继续理解你。`;
       }

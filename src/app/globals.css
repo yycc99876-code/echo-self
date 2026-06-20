@@ -219,7 +219,6 @@ button:disabled {
   background-image: url('/starry-night.jpg');
   background-size: cover;
   background-position: center;
-  filter: url('#starry-flow') brightness(0.6) contrast(1.1) saturate(1.2);
   animation: starry-drift 60s ease-in-out infinite alternate;
 }
 
@@ -262,7 +261,7 @@ button:disabled {
 
 .echo-stage {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   min-height: 100vh;
   display: grid;
   grid-template-rows: minmax(300px, 46vh) auto auto 1fr;
@@ -409,7 +408,7 @@ button:disabled {
   position: absolute;
   left: 50%;
   bottom: 28px;
-  z-index: 4;
+  z-index: 6;
   width: min(760px, calc(100vw - 48px));
   min-height: 56px;
   display: flex;
@@ -471,7 +470,7 @@ button:disabled {
   position: absolute;
   left: 50%;
   bottom: 88px;
-  z-index: 4;
+  z-index: 6;
   transform: translateX(-50%);
   color: rgba(216, 208, 194, 0.82);
   font-size: 12px;
