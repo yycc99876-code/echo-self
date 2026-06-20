@@ -36,9 +36,6 @@ export default function Home() {
             <Link href="/echo" className="primary-button">
               先和 Echo 说一句
             </Link>
-            <Link href="/life-chart" className="secondary-button">
-              手动编辑 Life Chart
-            </Link>
           </div>
         </div>
 
@@ -54,7 +51,7 @@ export default function Home() {
             ))}
           </div>
           <p className="mt-5 border-t border-[var(--border-subtle)] pt-4 text-sm text-[var(--text-tertiary)]">
-            最终目标不是“填完资料”，而是形成一套连续循环：说出状态、得到回应、夜间校准、长期记忆更新，再回到下一次更懂你的对话。
+            最终目标不是“填完资料”，而是形成一套连续循环：说出状态、得到回应、在继续对话里自动校准，重要线索进入长期记忆，再回到下一次更懂你的对话。
           </p>
         </div>
       </section>

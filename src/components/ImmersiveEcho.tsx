@@ -7,6 +7,9 @@ import type { MemoryState, Message, OnboardingField } from "@/lib/server-memory-
 import { ONBOARDING_FIELDS, ONBOARDING_LABELS } from "@/lib/onboarding-flow";
 import { isSpeechRecognitionSupported, startSpeechRecognition } from "@/lib/speech-recognition";
 import { speakText } from "@/lib/tts";
+import { motion, AnimatePresence } from "framer-motion";
+import { Mic, Send, X, Menu } from "lucide-react";
+import { NeuralCore } from "./NeuralCore";
 
 type EchoMode = "standby" | "listening" | "thinking" | "speaking" | "calibrating";
 
@@ -17,18 +20,6 @@ const statusLabel: Record<EchoMode, string> = {
   speaking: "正在回应",
   calibrating: "档案正在成形",
 };
-
-const particleSeeds = Array.from({ length: 190 }, (_, index) => {
-  const angle = index * 2.399963;
-  const radius = Math.sqrt(((index * 47) % 101) / 101) * (58 + ((index * 13) % 132));
-  const verticalBias = Math.sin(index * 0.37) * 18;
-  return {
-    x: Math.cos(angle) * radius * 0.86,
-    y: Math.sin(angle) * radius * 1.05 + verticalBias,
-    s: 1 + ((index * 17) % 6) * 0.34,
-    d: (index * 31) % 900,
-  };
-});
 
 export function ImmersiveEcho() {
   const [memoryState, setMemoryState] = useState<MemoryState | null>(null);
@@ -73,7 +64,7 @@ export function ImmersiveEcho() {
   const secondLine = latestAssistant?.content
     ? restLines(latestAssistant.content)
     : hasLifeChart
-      ? "你可以从今日回声、夜间校准，或者一句随便聊聊开始。"
+      ? "不用选入口。直接说你此刻最真实的一句话，我会沿着这份档案继续校准。"
       : onboarding
         ? `下一步：${ONBOARDING_LABELS[onboarding.currentField]}`
         : "先告诉我一个名字，或者直接说你现在的状态。";
@@ -86,7 +77,7 @@ export function ImmersiveEcho() {
 
   async function submit(raw: string, inputType: "text" | "voice" = "text") {
     const text = raw.trim();
-    if (!text || mode === "thinking" || mode === "speaking") return;
+    if (!text || mode === "thinking" || mode === "calibrating") return;
 
     stopSpeechRef.current();
     setInput("");
@@ -126,11 +117,14 @@ export function ImmersiveEcho() {
   }
 
   function startVoice() {
-    if (!isSpeechRecognitionSupported() || mode === "thinking" || mode === "speaking") {
-      setNotice("这个浏览器暂时听不见你，可以先打字。");
+    if (mode === "thinking" || mode === "calibrating") {
       return;
     }
     stopSpeechRef.current();
+    if (!isSpeechRecognitionSupported()) {
+      setNotice("这个浏览器暂时听不见你，可以先打字。");
+      return;
+    }
     setMode("listening");
     setNotice("我在听，说完会自动送出。");
     recognitionRef.current = startSpeechRecognition({
@@ -154,10 +148,18 @@ export function ImmersiveEcho() {
 
   return (
     <main className="echo-immersive fixed inset-0 z-40 overflow-hidden">
+      <svg className="hidden" style={{ position: "absolute", width: 0, height: 0 }}>
+        <filter id="starry-flow">
+          <feTurbulence type="fractalNoise" baseFrequency="0.003 0.005" numOctaves="3" result="noise">
+            <animate attributeName="baseFrequency" values="0.003 0.005; 0.005 0.007; 0.003 0.005" dur="40s" repeatCount="indefinite" />
+          </feTurbulence>
+          <feDisplacementMap in="SourceGraphic" in2="noise" scale="30" xChannelSelector="R" yChannelSelector="G" />
+        </filter>
+      </svg>
+      <div className="echo-starry-bg" aria-hidden />
+      <div className="echo-starry-overlay" aria-hidden />
       <button type="button" className="echo-menu-button" onClick={() => setDrawerOpen(true)} aria-label="Open Echo menu">
-        <span />
-        <span />
-        <span />
+        <Menu size={20} className="text-[rgba(236,239,242,0.72)]" />
       </button>
 
       <section className="echo-stage">
@@ -167,10 +169,11 @@ export function ImmersiveEcho() {
         <div className="echo-copy">
           <p className="echo-primary-line">{centralLine}</p>
           {secondLine && <p className="echo-secondary-line">{secondLine}</p>}
+          {latestUser && <div className="echo-user-signal">{latestUser.content}</div>}
         </div>
 
         {hasLifeChart ? (
-          <DailyActions disabled={mode === "thinking" || mode === "speaking"} onSelect={submit} />
+          <div className="echo-single-path">继续说就可以，Echo 会在对话里完成校准。</div>
         ) : (
           <OnboardingProgress completedFields={completedFields} remaining={remaining} progress={progress} />
         )}
@@ -178,7 +181,7 @@ export function ImmersiveEcho() {
 
       <Composer
         value={input}
-        disabled={mode === "thinking" || mode === "speaking"}
+        disabled={mode === "thinking" || mode === "calibrating"}
         placeholder={hasLifeChart ? "和 Echo 聊聊此刻的你..." : "输入你的姓名、性别、出生日期时间和地点..."}
         onChange={setInput}
         onSend={() => submit(input, "text")}
@@ -186,49 +189,37 @@ export function ImmersiveEcho() {
       />
 
       {notice && <div className="echo-toast">{notice}</div>}
-      {latestUser && <div className="echo-last-user">{latestUser.content}</div>}
 
-      {drawerOpen && (
-        <EchoDrawer
-          state={memoryState}
-          onClose={() => setDrawerOpen(false)}
-          onGuide={() => {
-            setDrawerOpen(false);
-            setGuideOpen(true);
-          }}
-        />
-      )}
-      {guideOpen && <GuideModal onClose={() => setGuideOpen(false)} />}
+      <AnimatePresence>
+        {drawerOpen && (
+          <EchoDrawer
+            state={memoryState}
+            onClose={() => setDrawerOpen(false)}
+            onGuide={() => {
+              setDrawerOpen(false);
+              setGuideOpen(true);
+            }}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {guideOpen && <GuideModal onClose={() => setGuideOpen(false)} />}
+      </AnimatePresence>
     </main>
   );
 }
 
 function EchoCore({ mode, hasLifeChart }: { mode: EchoMode; hasLifeChart: boolean }) {
   return (
-    <div className={`echo-core echo-core-${mode} ${hasLifeChart ? "echo-core-awake" : ""}`} aria-hidden>
+    <motion.div 
+      initial={{ scale: 0.9, opacity: 0, filter: "blur(10px)" }}
+      animate={{ scale: 1, opacity: 1, filter: "blur(0px)" }}
+      transition={{ type: "spring", bounce: 0.2, duration: 1.2 }}
+      className={`echo-core echo-core-${mode} ${hasLifeChart ? "echo-core-awake" : ""}`} aria-hidden
+    >
       <div className="echo-core-glow" />
-      <div className="echo-core-body">
-        {particleSeeds.map((particle, index) => (
-          <span
-            key={index}
-            className="echo-particle"
-            style={{
-              "--x": `${particle.x}px`,
-              "--y": `${particle.y}px`,
-              "--s": `${particle.s}px`,
-              "--d": `${particle.d}ms`,
-            } as CSSProperties}
-          />
-        ))}
-      </div>
-      {hasLifeChart && (
-        <div className="echo-orbit">
-          <button type="button">回声</button>
-          <button type="button">校准</button>
-          <button type="button">日志</button>
-        </div>
-      )}
-    </div>
+      <NeuralCore mode={mode} hasLifeChart={hasLifeChart} />
+    </motion.div>
   );
 }
 
@@ -259,23 +250,6 @@ function OnboardingProgress({
   );
 }
 
-function DailyActions({ disabled, onSelect }: { disabled: boolean; onSelect: (text: string) => void }) {
-  const actions = [
-    ["今日回声", "给我今天的一个轻量回声。"],
-    ["夜间校准", "我们做一次夜间校准。"],
-    ["随便聊聊", "我想先随便聊聊。"],
-  ];
-  return (
-    <div className="echo-actions">
-      {actions.map(([label, prompt]) => (
-        <button key={label} type="button" disabled={disabled} onClick={() => onSelect(prompt)}>
-          {label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function Composer({
   value,
   disabled,
@@ -293,9 +267,9 @@ function Composer({
 }) {
   return (
     <div className="echo-composer">
-      <button type="button" className="echo-attach" aria-label="Voice input" onClick={onVoice} disabled={disabled}>
-        ◌
-      </button>
+      <motion.button whileHover={{ scale: 0.95 }} whileTap={{ scale: 0.9 }} type="button" className="echo-attach" aria-label="Voice input" onClick={onVoice} disabled={disabled}>
+        <Mic size={18} strokeWidth={2} />
+      </motion.button>
       <textarea
         value={value}
         disabled={disabled}
@@ -309,18 +283,21 @@ function Composer({
           }
         }}
       />
-      <button type="button" className="echo-send" onClick={onSend} disabled={disabled || !value.trim()} aria-label="Send">
-        →
-      </button>
+      <motion.button whileHover={{ scale: 0.95 }} whileTap={{ scale: 0.9 }} type="button" className="echo-send" onClick={onSend} disabled={disabled || !value.trim()} aria-label="Send">
+        <Send size={18} strokeWidth={2} />
+      </motion.button>
     </div>
   );
 }
 
 function EchoDrawer({ state, onClose, onGuide }: { state: MemoryState | null; onClose: () => void; onGuide: () => void }) {
   return (
-    <aside className="echo-drawer">
+    <motion.aside 
+      initial={{ x: "-100%" }} animate={{ x: 0 }} exit={{ x: "-100%" }} transition={{ type: "spring", bounce: 0, duration: 0.4 }}
+      className="echo-drawer"
+    >
       <button type="button" className="echo-close" onClick={onClose}>
-        ×
+        <X size={28} />
       </button>
       <div className="font-label text-[11px] text-[var(--text-faint)]">ECHO MENU</div>
       <h2 className="font-editorial mt-3 text-3xl">Echo Self</h2>
@@ -330,24 +307,26 @@ function EchoDrawer({ state, onClose, onGuide }: { state: MemoryState | null; on
       </button>
       <div className="echo-drawer-list">
         <a href="/memory">回声日志</a>
-        <a href="/life-chart">编辑档案</a>
         <a href="/relationship">关系线索</a>
       </div>
       <div className="echo-drawer-card">
         <span className="font-label">当前状态</span>
         <strong>{state?.lifeChart ? "已唤醒" : "正在建档"}</strong>
-        <p>{state?.lifeChart ? "可以开始今日回声与夜间校准。" : "继续回答底部问题，让 Echo 完成第一层校准。"}</p>
+        <p>{state?.lifeChart ? "不用切换入口。继续在底部输入框里说话，Echo 会沿着你的档案更新理解。" : "继续回答底部问题，让 Echo 完成第一层校准。"}</p>
       </div>
-    </aside>
+    </motion.aside>
   );
 }
 
 function GuideModal({ onClose }: { onClose: () => void }) {
   return (
-    <div className="echo-guide-backdrop">
-      <section className="echo-guide">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="echo-guide-backdrop">
+      <motion.section 
+        initial={{ y: 20, opacity: 0, scale: 0.96 }} animate={{ y: 0, opacity: 1, scale: 1 }} exit={{ y: 20, opacity: 0, scale: 0.96 }} transition={{ type: "spring", bounce: 0 }}
+        className="echo-guide"
+      >
         <button type="button" className="echo-close" onClick={onClose}>
-          ×
+          <X size={28} />
         </button>
         <div className="font-label text-[11px] text-[var(--text-faint)]">ECHO 使用说明</div>
         <h2 className="font-editorial mt-3 text-4xl">你的私人 Echo Agent</h2>
@@ -363,13 +342,13 @@ function GuideModal({ onClose }: { onClose: () => void }) {
         <div className="echo-guide-grid">
           <article>
             <span>清晨</span>
-            <strong>今日回声</strong>
-            <p>给你一句轻量判断和一个当天可执行的小动作。</p>
+            <strong>自然醒来</strong>
+            <p>不用先选功能。你说一句刚醒来的状态，Echo 会顺着它开始理解今天。</p>
           </article>
           <article>
-            <span>夜间</span>
-            <strong>对话式校准</strong>
-            <p>不是问卷，而是逐条聊今天哪里准、哪里跑偏。</p>
+            <span>对话中</span>
+            <strong>边聊边校准</strong>
+            <p>不是问卷，而是在连续对话里识别偏好、纠正、关系线索和反复情绪。</p>
           </article>
           <article>
             <span>日志</span>
@@ -380,8 +359,8 @@ function GuideModal({ onClose }: { onClose: () => void }) {
         <button type="button" className="echo-guide-button" onClick={onClose}>
           开始和 Echo 过一天
         </button>
-      </section>
-    </div>
+      </motion.section>
+    </motion.div>
   );
 }
 

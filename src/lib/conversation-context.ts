@@ -26,6 +26,13 @@ export type ContextPack = {
   relationshipSummary: string | null;
 };
 
+const MAX = {
+  lifeChart: 600,
+  activeMemory: 520,
+  wikiPage: 320,
+  relationship: 480,
+};
+
 function hasAny(input: string, patterns: RegExp[]) {
   return patterns.some((pattern) => pattern.test(input));
 }
@@ -34,51 +41,51 @@ export function classifyConversation(message: string): ConversationType {
   const text = message.trim();
   if (!text) return "unknown";
 
-  if (hasAny(text, [/傻逼|垃圾|狗屎|你在干什么|你干嘛|啥意思|什么意思|你是什么意思|听不懂|没懂|别扯|别乱说|你有病/])) {
+  if (hasAny(text, [/傻逼|垃圾|狗屎|你在干什么|你在干嘛|什么意思|啥意思|听不懂|没懂|乱说|别瞎|有病|离谱|不对劲/])) {
     return "frustration";
   }
 
-  if (hasAny(text, [/你在干什么|你能干什么|你是谁|你现在.*干嘛|你到底.*干嘛/])) {
+  if (hasAny(text, [/你是谁|你能干什么|你现在.*干嘛|你到底.*干嘛|这个产品.*怎么用|为什么.*回复|机制|逻辑/])) {
     return "meta";
   }
 
-  if (hasAny(text, [/不要/, /不是.*意思/, /不对/, /纠正/, /以后/, /下次/, /你理解错/, /别.*玄学/, /别把/])) {
+  if (hasAny(text, [/不要|别把|别总|不是.*意思|不是.*产品|你理解错|你误解|纠正|以后你|下次你|记住|你要记住/])) {
     return "correction";
   }
 
-  if (hasAny(text, [/我更喜欢/, /我不喜欢/, /我希望你/, /回答.*具体/, /直接一点/, /别.*空泛/, /像.*产品经理/, /你要记住/, /记住/])) {
+  if (hasAny(text, [/我更喜欢|我不喜欢|我希望你|回答.*具体|直接一点|别空泛|像产品经理|少点玄学|别玄学|语气|风格/])) {
     return "preference";
   }
 
-  if (hasAny(text, [/产品/, /AI 产品/i, /MVP/i, /连续对话/, /记忆系统/, /AuraMate/i, /Codex/i, /Claude/i, /founder/i, /创业/])) {
+  if (hasAny(text, [/Echo Self|AuraMate|产品|AI\s*产品|MVP|创业|founder|用户|复刻|功能|界面|交互|连续对话|长对话|记忆系统|智能体|agent|TTS|语音|Codex|Claude|Antigravity/i])) {
     return "product_direction";
   }
 
-  if (hasAny(text, [/关系/, /联系/, /朋友/, /家人/, /合作/, /导师/, /同学/, /旧友/, /见她/, /回复.*人/])) {
+  if (hasAny(text, [/关系|联系|朋友|家人|父母|同学|导师|合作|同事|旧友|前任|见她|见他|回复.*人|很久没联系/])) {
     return "relationship";
   }
 
-  if (
-    text.length <= 40 &&
-    hasAny(text, [/哈哈+/, /^哈+$/, /你在吗/, /刚醒/, /随便聊/, /轻松点/, /不知道该干嘛/, /今天.*困/, /早|晚|你好|hi|hello/i])
-  ) {
-    return "casual";
-  }
-
-  if (hasAny(text, [/今天.*干什么/, /周[一二三四五六日天末].*干什么/, /建议我.*干什么/, /我该干什么/, /做什么/, /安排一下/, /给我.*安排/, /今天.*先做/])) {
+  if (hasAny(text, [/今天.*干什么|周[一二三四五六日天末].*干什么|建议我.*干什么|我该干什么|做什么|安排一下|今天.*先做|现在.*做什么/])) {
     return "action_request";
   }
 
-  if (hasAny(text, [/适合.*方向/, /转向/, /职业/, /人生/, /未来/, /以后.*做什么/, /该不该/, /选择/])) {
+  if (hasAny(text, [/适合.*方向|转向|职业|人生|未来|以后.*做什么|该不该|选择|方向|投入|长期|目标/])) {
     return "life_direction";
   }
 
-  if (hasAny(text, [/命谱/, /Life Chart/i, /反复出现.*主题/, /天赋/, /阴影/])) {
+  if (hasAny(text, [/命谱|Life Chart|life chart|八字|星盘|反复出现.*主题|天赋|命格|运势|灵签/i])) {
     return "life_chart_question";
   }
 
-  if (hasAny(text, [/焦虑/, /烦/, /累/, /撑不住/, /难过/, /兴奋/, /压力/, /迷茫/, /困/, /懵/, /反复/])) {
+  if (hasAny(text, [/焦虑|烦|累|困|懵|难受|撑不住|压力|兴奋|迷茫|害怕|失眠|崩|低落|委屈|反复|一直|总是/])) {
     return "emotion";
+  }
+
+  if (
+    text.length <= 48 &&
+    hasAny(text, [/哈哈+|^哈+$|你在吗|在吗|早|晚安|刚醒|随便聊|轻松点|不知道该干嘛|hi|hello|你好|嗯嗯|ok|好呀|行吧/i])
+  ) {
+    return "casual";
   }
 
   return "unknown";
@@ -87,53 +94,34 @@ export function classifyConversation(message: string): ConversationType {
 export function shouldWriteLongTermMemory(type: ConversationType, message: string) {
   if (type === "correction" || type === "preference") return true;
   if (type === "product_direction" || type === "life_direction" || type === "life_chart_question" || type === "relationship") return true;
-  if (type === "emotion" && hasAny(message, [/一直/, /总是/, /最近/, /反复/, /持续/, /撑不住/])) return true;
-  if (hasAny(message, [/以后.*记住/, /你要记住/, /长期/, /目标/, /我想做/, /我希望/])) return true;
+  if (type === "emotion" && hasAny(message, [/一直|总是|最近|反复|持续|撑不住|长期|每天|又开始/])) return true;
+  if (hasAny(message, [/以后.*记住|你要记住|长期目标|我想做|我希望|稳定|不要忘/])) return true;
   return false;
 }
 
 function truncate(text: string | null | undefined, max: number) {
   if (!text) return null;
-  return text.length > max ? `${text.slice(0, max)}...` : text;
+  const clean = text.replace(/\n{3,}/g, "\n\n").trim();
+  return clean.length > max ? `${clean.slice(0, max)}...` : clean;
 }
 
-function extractRules(pages: WikiPage[]) {
-  const rules = pages.find((page) => page.slug === "rules/future-response-rules");
-  if (!rules) return [];
-  return rules.contentMd
+function linesFromPage(pages: WikiPage[], slug: string, maxItems: number) {
+  const page = pages.find((item) => item.slug === slug);
+  if (!page) return [];
+  return page.contentMd
     .split("\n")
     .map((line) => line.replace(/^[-#\s]+/, "").trim())
     .filter((line) => line.length > 8)
-    .slice(-5);
-}
-
-function extractOpenThreads(pages: WikiPage[]) {
-  const threads = pages.find((page) => page.slug === "relationship/open-threads");
-  if (!threads) return [];
-  return threads.contentMd
-    .split("\n")
-    .map((line) => line.replace(/^[-#\s]+/, "").trim())
-    .filter((line) => line.length > 8)
-    .slice(-3);
-}
-
-function extractPreferences(pages: WikiPage[]) {
-  const preferences = pages.find((page) => page.slug === "user/preferences");
-  if (!preferences) return [];
-  return preferences.contentMd
-    .split("\n")
-    .map((line) => line.replace(/^[-#\s]+/, "").trim())
-    .filter((line) => line.length > 8)
-    .slice(-5);
+    .slice(-maxItems);
 }
 
 function summarizeRelationships(items: RelationshipItem[]) {
   if (items.length === 0) return null;
-  const typeCounts = items.reduce<Record<string, number>>((acc, item) => {
+  const counts = items.reduce<Record<string, number>>((acc, item) => {
     acc[item.type] = (acc[item.type] ?? 0) + 1;
     return acc;
   }, {});
-  const counts = Object.entries(typeCounts)
+  const countLine = Object.entries(counts)
     .map(([type, count]) => `${type}: ${count}`)
     .join(", ");
   const notes = items
@@ -141,19 +129,19 @@ function summarizeRelationships(items: RelationshipItem[]) {
     .slice(-3)
     .map((item) => `- ${item.name} (${item.type}, ${item.strength}): ${item.notes}`)
     .join("\n");
-  return truncate(`Relationship Map counts: ${counts}\n${notes}`, 500);
+  return truncate(`Relationship counts: ${countLine}${notes ? `\n${notes}` : ""}`, MAX.relationship);
 }
 
 function relevantPages(pages: WikiPage[], type: ConversationType) {
   const priorityByType: Record<ConversationType, string[]> = {
     onboarding: ["rules/future-response-rules", "user/preferences"],
     casual: ["rules/future-response-rules", "user/preferences"],
-    meta: ["rules/future-response-rules", "user/preferences"],
+    meta: ["rules/future-response-rules", "user/preferences", "product/current-direction"],
     frustration: ["rules/future-response-rules", "user/preferences"],
     action_request: ["rules/future-response-rules", "user/preferences", "destiny/current-theme"],
     correction: ["rules/future-response-rules", "user/preferences", "product/current-direction"],
     preference: ["user/preferences", "rules/future-response-rules"],
-    product_direction: ["product/current-direction", "rules/future-response-rules", "destiny/current-theme"],
+    product_direction: ["product/current-direction", "rules/future-response-rules", "conversation/session-summaries"],
     life_direction: ["destiny/current-theme", "destiny/decision-patterns", "user/life-chart-interpretations"],
     life_chart_question: ["user/life-chart-interpretations", "destiny/current-theme"],
     relationship: ["relationship/current-state", "relationship/open-threads", "relationship/timeline"],
@@ -161,12 +149,11 @@ function relevantPages(pages: WikiPage[], type: ConversationType) {
     unknown: ["destiny/current-theme", "rules/future-response-rules", "user/preferences"],
   };
 
-  const wanted = priorityByType[type];
-  return wanted
+  return priorityByType[type]
     .map((slug) => pages.find((page) => page.slug === slug))
     .filter((page): page is WikiPage => Boolean(page))
     .slice(0, 3)
-    .map((page) => ({ ...page, contentMd: truncate(page.contentMd, 300) ?? "" }));
+    .map((page) => ({ ...page, contentMd: truncate(page.contentMd, MAX.wikiPage) ?? "" }));
 }
 
 export function buildContextPack({
@@ -185,13 +172,13 @@ export function buildContextPack({
   relationshipItems?: RelationshipItem[];
 }): ContextPack {
   return {
-    lifeChartSummary: truncate(lifeChart?.summaryMd ?? lifeChart?.contentMd, 600),
-    activeMemory: truncate(activeMemory?.contentMd, 500),
-    futureRules: extractRules(wikiPages),
+    lifeChartSummary: truncate(lifeChart?.summaryMd ?? lifeChart?.contentMd, MAX.lifeChart),
+    activeMemory: truncate(activeMemory?.contentMd, MAX.activeMemory),
+    futureRules: linesFromPage(wikiPages, "rules/future-response-rules", 5),
     recentMessages: recentMessages.slice(-8),
     relevantWikiPages: relevantPages(wikiPages, conversationType),
-    openThreads: extractOpenThreads(wikiPages),
-    userPreferences: extractPreferences(wikiPages),
+    openThreads: linesFromPage(wikiPages, "relationship/open-threads", 3),
+    userPreferences: linesFromPage(wikiPages, "user/preferences", 5),
     relationshipSummary: summarizeRelationships(relationshipItems),
   };
 }

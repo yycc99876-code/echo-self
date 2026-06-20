@@ -22,7 +22,7 @@ import {
   shouldWriteLongTermMemory,
   type ConversationType,
 } from "@/lib/conversation-context";
-import { queueMemoryWriter } from "@/lib/wiki-updater";
+import { queueConversationConsolidation, queueMemoryWriter } from "@/lib/wiki-updater";
 
 export async function POST(request: NextRequest) {
   try {
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
         });
         addWikiEdit({ pageSlug: "user/life-chart-interpretations", editSummary: "通过对话式唤醒保存初始 Life Chart" });
 
-        reply = `档案已经成形，${savedChart.userName}。\n\n我现在有了第一层地图：你的出生信息、当前问题，以及你希望我怎样陪你校准。\n\n接下来不用急着分析。你可以从三个入口开始：今日回声、夜间校准，或者随便聊聊。`;
+        reply = `档案已经成形，${savedChart.userName}。\n\n我现在有了第一层地图：你的出生信息、当前问题，以及你希望我怎样陪你校准。\n\n接下来不用选入口，也不用切页面。你只要继续说一句此刻最真实的状态，我会沿着这份档案继续理解你。`;
       }
 
       const assistantMessage = saveMessage({
@@ -126,6 +126,7 @@ export async function POST(request: NextRequest) {
     if (shouldWrite) {
       queueMemoryWriter({ userMessage, assistantMessage, conversationType, contextPack });
     }
+    queueConversationConsolidation();
 
     return NextResponse.json({
       reply,

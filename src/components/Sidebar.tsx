@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation";
 const links = [
   { href: "/", label: "首页", meta: "Overview", icon: "ES" },
   { href: "/echo", label: "Echo", meta: "Digital self", icon: "EC" },
-  { href: "/life-chart", label: "Life Chart", meta: "Dossier", icon: "LC" },
   { href: "/memory", label: "Memory", meta: "Archive", icon: "MM" },
   { href: "/relationship", label: "Relationship", meta: "Map", icon: "RM" },
 ];

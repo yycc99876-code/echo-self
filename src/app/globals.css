@@ -37,7 +37,7 @@ body {
   margin: 0;
   background: var(--bg-root);
   color: var(--text-primary);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", sans-serif;
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", sans-serif;
   line-height: 1.6;
 }
 
@@ -62,7 +62,9 @@ button:disabled {
 }
 
 .font-editorial {
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-outfit), sans-serif;
+  letter-spacing: -0.02em;
+  font-weight: 600;
 }
 
 .font-label {
@@ -206,22 +208,32 @@ button:disabled {
 }
 
 .echo-immersive {
-  background:
-    radial-gradient(circle at 50% 18%, rgba(216, 208, 194, 0.18), transparent 24rem),
-    radial-gradient(circle at 30% 42%, rgba(236, 239, 242, 0.10), transparent 34rem),
-    linear-gradient(90deg, rgba(236, 239, 242, 0.09), transparent 38%, rgba(0, 0, 0, 0.48)),
-    #11100e;
+  background: #000000;
   color: var(--text-primary);
 }
 
-.echo-immersive::before {
-  content: "";
+.echo-starry-bg {
+  position: absolute;
+  inset: -10%;
+  z-index: 0;
+  background-image: url('/starry-night.jpg');
+  background-size: cover;
+  background-position: center;
+  filter: url('#starry-flow') brightness(0.6) contrast(1.1) saturate(1.2);
+  animation: starry-drift 60s ease-in-out infinite alternate;
+}
+
+.echo-starry-overlay {
   position: absolute;
   inset: 0;
+  z-index: 1;
+  background: linear-gradient(180deg, rgba(8,10,13,0.3) 0%, rgba(8,10,13,0.9) 100%);
   pointer-events: none;
-  background:
-    radial-gradient(circle at 64% 58%, rgba(175, 199, 232, 0.05), transparent 28rem),
-    linear-gradient(180deg, rgba(0, 0, 0, 0.02), rgba(0, 0, 0, 0.30));
+}
+
+@keyframes starry-drift {
+  0% { transform: scale(1) translate(0, 0); }
+  100% { transform: scale(1.05) translate(-2%, 2%); }
 }
 
 .echo-menu-button {
@@ -235,6 +247,7 @@ button:disabled {
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.08);
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(12px);
   display: grid;
   place-content: center;
   gap: 4px;
@@ -268,85 +281,16 @@ button:disabled {
   position: absolute;
   inset: 18% 18% 8%;
   border-radius: 50%;
-  background:
-    radial-gradient(circle at 50% 28%, rgba(216, 208, 194, 0.36), transparent 22%),
-    radial-gradient(circle at 50% 55%, rgba(175, 199, 232, 0.16), transparent 46%),
-    radial-gradient(circle, rgba(142, 214, 163, 0.08), transparent 60%);
-  filter: blur(28px);
-  opacity: 0.95;
-  animation: echo-breathe 5s ease-in-out infinite;
+  background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.15), transparent 60%);
+  filter: blur(40px);
+  opacity: 0.8;
 }
 
-.echo-core-body {
-  position: absolute;
-  left: 50%;
-  top: 46%;
-  width: 1px;
-  height: 1px;
-}
 
-.echo-particle {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: var(--s);
-  height: var(--s);
-  border-radius: 50%;
-  background: rgba(236, 239, 242, 0.82);
-  box-shadow: 0 0 13px rgba(175, 199, 232, 0.58);
-  transform: translate(var(--x), var(--y));
-  animation: echo-drift 7s ease-in-out infinite;
-  animation-delay: var(--d);
-}
-
-.echo-core-awake .echo-particle:nth-child(3n) {
-  background: rgba(175, 199, 232, 0.86);
-}
-
-.echo-core-awake .echo-particle:nth-child(5n) {
-  background: rgba(142, 214, 163, 0.76);
-}
-
-.echo-core-thinking .echo-particle,
-.echo-core-calibrating .echo-particle {
-  animation-duration: 3.4s;
-}
 
 .echo-core-speaking .echo-core-glow {
   opacity: 1;
   filter: blur(22px);
-}
-
-.echo-orbit {
-  position: absolute;
-  inset: 18% 20% 10%;
-}
-
-.echo-orbit button {
-  position: absolute;
-  width: 54px;
-  height: 54px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(17, 21, 27, 0.66);
-  color: var(--text-secondary);
-  font-size: 11px;
-  backdrop-filter: blur(10px);
-}
-
-.echo-orbit button:nth-child(1) {
-  left: 9%;
-  top: 42%;
-}
-
-.echo-orbit button:nth-child(2) {
-  right: 8%;
-  top: 16%;
-}
-
-.echo-orbit button:nth-child(3) {
-  left: 48%;
-  bottom: 0;
 }
 
 .echo-status {
@@ -379,6 +323,21 @@ button:disabled {
   white-space: pre-line;
   font-size: clamp(14px, 1.55vw, 18px);
   line-height: 1.9;
+}
+
+.echo-user-signal {
+  width: fit-content;
+  max-width: min(520px, 88vw);
+  margin: 18px 0 0 auto;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(236, 239, 242, 0.64);
+  padding: 7px 13px;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: right;
+  backdrop-filter: blur(10px);
 }
 
 .echo-progress-wrap {
@@ -436,23 +395,14 @@ button:disabled {
   background: linear-gradient(90deg, #50d4be, #d8c25d);
 }
 
-.echo-actions {
+.echo-single-path {
   position: absolute;
   left: 50%;
   bottom: 120px;
-  display: flex;
-  gap: 12px;
   transform: translateX(-50%);
-}
-
-.echo-actions button {
-  min-width: 118px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.10);
-  color: rgba(236, 239, 242, 0.84);
-  padding: 10px 16px;
-  backdrop-filter: blur(12px);
+  color: rgba(236, 239, 242, 0.36);
+  font-size: 13px;
+  letter-spacing: 0;
 }
 
 .echo-composer {
@@ -527,17 +477,6 @@ button:disabled {
   font-size: 12px;
 }
 
-.echo-last-user {
-  position: absolute;
-  left: 50%;
-  bottom: 82px;
-  max-width: min(520px, calc(100vw - 60px));
-  transform: translateX(-50%);
-  color: rgba(236, 239, 242, 0.28);
-  font-size: 13px;
-  text-align: center;
-}
-
 .echo-drawer {
   position: absolute;
   left: 0;
@@ -547,9 +486,9 @@ button:disabled {
   height: 100%;
   padding: 32px;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(8, 8, 8, 0.92);
+  background: rgba(8, 8, 8, 0.55);
   box-shadow: 30px 0 90px rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(28px);
 }
 
 .echo-close {
@@ -624,8 +563,9 @@ button:disabled {
   overflow-y: auto;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 34px;
-  background: rgba(8, 8, 8, 0.94);
+  background: rgba(8, 8, 8, 0.65);
   box-shadow: 0 30px 100px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(28px);
   padding: 32px;
 }
 
@@ -700,17 +640,7 @@ button:disabled {
   }
 }
 
-@keyframes echo-drift {
-  0%,
-  100% {
-    transform: translate(var(--x), var(--y)) scale(1);
-    opacity: 0.62;
-  }
-  50% {
-    transform: translate(calc(var(--x) * 0.82), calc(var(--y) * 1.08)) scale(1.45);
-    opacity: 1;
-  }
-}
+
 
 @media (max-width: 760px) {
   .echo-stage {
@@ -730,9 +660,8 @@ button:disabled {
     display: none;
   }
 
-  .echo-actions {
+  .echo-single-path {
     width: calc(100vw - 40px);
-    overflow-x: auto;
-    justify-content: flex-start;
+    text-align: center;
   }
 }

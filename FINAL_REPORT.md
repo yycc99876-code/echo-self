@@ -141,3 +141,14 @@ npm run start
 - `GET /api/memory-state` now includes onboarding state so progress survives refresh.
 - The onboarding progress bar is real data, not a visual-only mock.
 - After onboarding completion, Echo exposes three primary entrances: 今日回声, 夜间校准, and 随便聊聊.
+
+## Long Conversation Intelligence Update
+
+- Latest interaction model is now single-path: after onboarding, the user continues through the bottom Echo composer only. The separate daily echo, calibration, and casual-chat mode buttons were removed from the main Echo surface.
+- Life Chart is treated as something Echo collects through dialogue. Ordinary users are no longer pushed toward a manual Life Chart editor from the home page, main sidebar, or Echo drawer.
+- Conversation classification was rebuilt with readable rules for casual, frustration, meta, action request, correction, preference, product direction, relationship, emotion, life direction, and life chart turns.
+- ContextPack now stays compact: Future Response Rules, Active Memory, Life Chart summary, latest 8 messages, up to 3 relevant Wiki pages, open threads, preferences, and relationship summary.
+- Memory Writer now writes only durable information: corrections, stable preferences, product direction, relationship questions, life direction questions, repeated emotions, and explicit remember requests. Ordinary chat remains in Recent Messages.
+- Long conversations now get session consolidation. Every 10 messages, meaningful turns can be summarized into `conversation/session-summaries` so Echo can keep continuity without stuffing the full history into each prompt.
+- Fallback replies were rebuilt to avoid fixed fake arrays and the repeated “slowly unpack this theme” template. Fallback now branches by conversation type and gives natural replies for casual, frustration, meta, action, and relationship turns.
+- Speech playback can be interrupted. Sending another message or starting voice input stops the current TTS instead of forcing the user to wait.

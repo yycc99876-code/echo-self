@@ -119,8 +119,8 @@ export function ChatPanel({
             <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
               现在也可以直接说话。只是我还没有你的初始档案，所以会先从几个轻问题里认识你：你是谁、正在卡在哪、希望我怎样陪你校准。
             </p>
-            <a href="/life-chart" className="secondary-button mt-3 inline-block">
-              先建一份初始档案
+            <a href="/echo" className="secondary-button mt-3 inline-block">
+              回到 Echo 对话里建档
             </a>
           </div>
         ) : (
